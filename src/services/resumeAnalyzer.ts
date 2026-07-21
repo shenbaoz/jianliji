@@ -92,7 +92,8 @@ export function analyzeResume(input: ResumeInput): AnalysisReport {
   };
 }
 
-export function generateFollowUpQuestions(report: AnalysisReport): FollowUpQuestion[] {
+export function generateFollowUpQuestions(input: ResumeInput, report: AnalysisReport): FollowUpQuestion[] {
+  const jd = `${input.targetRole} ${input.jobDescription}`;
   const base: FollowUpQuestion[] = [
     {
       id: "metric",
@@ -119,7 +120,39 @@ export function generateFollowUpQuestions(report: AnalysisReport): FollowUpQuest
     });
   }
 
-  return base;
+  if (/前端|后端|Java|React|TypeScript|测试|软件|工程师/.test(jd)) {
+    base.push({
+      id: "tech-depth",
+      question: "这个技术项目里，你遇到过最具体的技术难点是什么？例如性能、接口、状态管理、数据库、并发或测试问题。",
+      reason: "技术岗需要看到工程难度，而不只是写用了哪些技术栈。"
+    });
+  }
+
+  if (/运营|新媒体|社群|内容|市场|品牌|销售|客户/.test(jd)) {
+    base.push({
+      id: "growth-result",
+      question: "这段运营/市场经历有没有曝光、阅读、粉丝、转化、成交、到场或留存数据？哪怕是大概区间也可以。",
+      reason: "运营市场岗最需要用数据证明结果。"
+    });
+  }
+
+  if (/产品|需求|用户体验|原型|竞品/.test(jd)) {
+    base.push({
+      id: "product-thinking",
+      question: "你做需求或原型时，依据是什么？来自用户反馈、数据、竞品、业务目标，还是团队讨论？",
+      reason: "产品岗需要体现判断依据和取舍能力。"
+    });
+  }
+
+  if (/金融|投研|咨询|商业分析|财务|数据分析/.test(jd)) {
+    base.push({
+      id: "analysis-output",
+      question: "你最终产出了什么分析结果？例如报告页数、图表、结论、建议，或被团队采用的判断。",
+      reason: "分析类岗位需要展示信息整理后的结论产出。"
+    });
+  }
+
+  return base.slice(0, 6);
 }
 
 export function generateOptimizedResume(

@@ -1,14 +1,15 @@
 import { FileText, WandSparkles } from "lucide-react";
 import { sampleResumeCases } from "../data/sampleCases";
-import type { ResumeInput } from "../types";
+import type { ResumeInput, SampleResumeCase, WorkflowStep } from "../types";
 
 type Props = {
   input: ResumeInput;
   onChange: (input: ResumeInput) => void;
   onNext: () => void;
+  onLoadSample: (sample: SampleResumeCase, nextStep?: WorkflowStep) => void;
 };
 
-export function HomeView({ input, onChange, onNext }: Props) {
+export function HomeView({ input, onChange, onNext, onLoadSample }: Props) {
   const update = (field: keyof ResumeInput, value: string) => {
     onChange({ ...input, [field]: value });
   };
@@ -85,14 +86,7 @@ export function HomeView({ input, onChange, onNext }: Props) {
             <button
               type="button"
               key={item.id}
-              onClick={() =>
-                onChange({
-                  candidateName: item.resumeText.split("｜")[0],
-                  targetRole: item.targetRole,
-                  resumeText: item.resumeText,
-                  jobDescription: item.jobDescription
-                })
-              }
+              onClick={() => onLoadSample(item, "job")}
             >
               <strong>{item.title}</strong>
               <span>{item.userType}</span>

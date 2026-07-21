@@ -277,6 +277,26 @@ button {
   margin-top: 22px;
 }
 
+.hero-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.hero-proof span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #31524d;
+  background: #eef8f6;
+  border: 1px solid #cde9e4;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .primary-button,
 .secondary-button,
 .link-button {
@@ -385,6 +405,29 @@ button {
   gap: 12px;
 }
 
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -4px 0 18px;
+}
+
+.filter-chip {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #4f625e;
+  padding: 0 12px;
+  font-weight: 700;
+}
+
+.filter-chip.active {
+  border-color: var(--accent);
+  background: #e8f7f4;
+  color: var(--accent-dark);
+}
+
 .case-card {
   min-height: 150px;
 }
@@ -397,6 +440,46 @@ button {
 
 .case-card p {
   margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.case-action {
+  margin-top: auto;
+  border: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font-weight: 800;
+}
+
+.value-grid,
+.delivery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.value-grid article,
+.delivery-grid article {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.value-grid strong,
+.delivery-grid strong {
+  font-size: 17px;
+}
+
+.value-grid span,
+.delivery-grid span {
   color: var(--muted);
   line-height: 1.7;
 }
@@ -727,6 +810,14 @@ h3 {
   background: #f4fbfa;
 }
 
+.before-box {
+  background: #fffafa;
+}
+
+.after-box {
+  position: relative;
+}
+
 .compare-columns span {
   display: block;
   font-weight: 800;
@@ -737,6 +828,18 @@ h3 {
 .compare-columns p {
   margin: 0;
   line-height: 1.7;
+}
+
+.compare-columns small {
+  display: block;
+  margin-top: 12px;
+  color: var(--accent-dark);
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.delivery-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .editor-grid {
@@ -750,6 +853,21 @@ h3 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.unlock-panel {
+  border: 1px solid #cde9e4;
+  border-radius: var(--radius);
+  background: #f3fbf9;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+  margin: 18px 0;
+}
+
+.unlock-panel span {
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .template-card {
@@ -915,6 +1033,8 @@ h3 {
 
   .landing-nav,
   .case-grid,
+  .value-grid,
+  .delivery-grid,
   .keyword-grid,
   .report-grid,
   .compare-columns,

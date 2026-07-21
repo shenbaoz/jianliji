@@ -46,6 +46,10 @@ export function EditorView({
       <div className="panel">
         <h1>模板与编辑</h1>
         <p className="muted-text">这里先用浏览器打印保存 PDF。微信支付暂不接入，付费导出位置已保留。</p>
+        <div className="unlock-panel">
+          <strong>当前为免费体验模式</strong>
+          <span>已开放模板预览、版本保存和浏览器打印。正式版可在这里接入会员、单次导出和微信支付。</span>
+        </div>
         <label className="field">
           <span>简历内容</span>
           <textarea rows={19} value={editedText} onChange={(event) => onEditedTextChange(event.target.value)} />

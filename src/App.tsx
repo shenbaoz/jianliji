@@ -23,6 +23,7 @@ import type {
   FollowUpQuestion,
   OptimizedResume,
   ResumeInput,
+  SampleResumeCase,
   SavedResumeVersion,
   WorkflowStep
 } from "./types";
@@ -73,7 +74,7 @@ export default function App() {
       return;
     }
     const nextReport = analyzeResume(input);
-    const nextQuestions = generateFollowUpQuestions(nextReport);
+    const nextQuestions = generateFollowUpQuestions(input, nextReport);
     setReport(nextReport);
     setQuestions(nextQuestions);
     setView("analysis");
@@ -114,14 +115,38 @@ export default function App() {
     setView("editor");
   };
 
+  const loadSampleCase = (sample: SampleResumeCase, nextStep: WorkflowStep = "workspace") => {
+    const sampleInput = {
+      candidateName: sample.resumeText.split("｜")[0],
+      targetRole: sample.targetRole,
+      resumeText: sample.resumeText,
+      jobDescription: sample.jobDescription
+    };
+    setInput(sampleInput);
+    setAnswers({});
+    setOptimized(null);
+    setEditedText("");
+    if (nextStep === "analysis") {
+      const nextReport = analyzeResume(sampleInput);
+      setReport(nextReport);
+      setQuestions(generateFollowUpQuestions(sampleInput, nextReport));
+      setView("analysis");
+      return;
+    }
+    setReport(null);
+    go(nextStep);
+  };
+
   return (
     <div className="app">
       <Header />
       <div className="app-body">
         {view !== "admin" && <WorkflowStepper active={visibleStep} onSelect={go} />}
         <main className={view === "admin" ? "content admin-content" : "content"}>
-          {view === "home" && <LandingView onNavigate={go} />}
-          {view === "workspace" && <HomeView input={input} onChange={setInput} onNext={() => go("job")} />}
+          {view === "home" && <LandingView onNavigate={go} onLoadSample={loadSampleCase} />}
+          {view === "workspace" && (
+            <HomeView input={input} onChange={setInput} onNext={() => go("job")} onLoadSample={loadSampleCase} />
+          )}
           {view === "job" && (
             <JobView input={input} onChange={setInput} onBack={() => go("workspace")} onAnalyze={runAnalysis} />
           )}
