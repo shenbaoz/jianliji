@@ -263,7 +263,9 @@ Paid features:
 
 ## WeChat Pay
 
-WeChat Pay can be integrated into the website.
+WeChat Pay can be integrated into the website later, but it is deferred from the first implementation pass.
+
+The first implementation should not call WeChat Pay APIs. It should keep a clean payment/order boundary so WeChat Pay can be added later without rewriting the resume workflow.
 
 Important requirements:
 
@@ -273,7 +275,7 @@ Important requirements:
 - The frontend should never hold merchant secrets.
 - Orders must only be marked as paid after the backend verifies the WeChat Pay callback.
 
-Recommended payment structure:
+Future recommended payment structure:
 
 - Create unpaid order in the website backend.
 - Backend requests WeChat Pay payment parameters.
@@ -282,7 +284,7 @@ Recommended payment structure:
 - Backend verifies signature and payment status.
 - Backend unlocks the paid resume/export feature.
 
-The first release can design the payment interface cleanly, even if payment is initially tested in sandbox or temporarily disabled behind admin settings.
+The first release should show pricing and export-gating UI only if useful, but real paid unlocks can stay disabled until the merchant account and payment method are ready.
 
 ## Admin Features
 
@@ -398,7 +400,7 @@ The implementation should avoid hidden generated code or opaque no-code tooling.
 ### Phase 4: Commercialization
 
 - Order system
-- WeChat Pay integration
+- Payment adapter prepared for future WeChat Pay integration
 - Feature unlock rules
 - Pricing page
 - Payment success/failure handling
@@ -445,4 +447,4 @@ Recommended default for the first implementation plan:
 - Build a web app with a modern React-based stack.
 - Use a backend with database support.
 - Start with PDF export before Word export.
-- Keep WeChat Pay as the primary payment target, but design the payment adapter so other payment methods can be added later.
+- Defer real WeChat Pay integration for now, but design the payment adapter so WeChat Pay or other payment methods can be added later.
