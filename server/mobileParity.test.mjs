@@ -17,6 +17,22 @@ test("mobile views reuse desktop generation save and export handlers", async () 
   assert.match(editor, /onClick=\{handleDownloadPdf\}/);
 });
 
+test("generation buttons do not pass a click event as resume input", async () => {
+  const app = await read("src/App.tsx");
+
+  assert.doesNotMatch(app, /onGenerate=\{runGeneration\}/);
+  assert.match(app, /onGenerate=\{\(\) => void runGeneration\(\)\}/);
+});
+
+test("the A4 editor preview is scaled to its actual mobile container", async () => {
+  const editor = await read("src/components/EditorView.tsx");
+
+  assert.match(editor, /new ResizeObserver\(updatePreviewScale\)/);
+  assert.match(editor, /window\.addEventListener\("resize", updatePreviewScale\)/);
+  assert.match(editor, /transform: `scale\(\$\{previewScale\}\)`/);
+  assert.match(editor, /height: previewHeight > 0 \? `\$\{previewHeight\}px` : undefined/);
+});
+
 test("shared pages expose the responsive presentation contract", async () => {
   const [app, shell, home, creator, editor, css] = await Promise.all([
     read("src/App.tsx"),
