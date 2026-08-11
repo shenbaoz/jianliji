@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Download, Save } from "lucide-react";
+import { Download } from "lucide-react";
 import DOMPurify from "dompurify";
 import { ResumeDocument } from "./ResumeDocument";
 import { applyTextToDocxPreview } from "../services/docxFileEditor";
@@ -19,18 +19,9 @@ function sanitizeHtml(html: string): string {
 
 interface EditorViewProps {
   currentVersion?: SavedResumeVersion;
-  onSave?: (version: SavedResumeVersion) => void;
-  qualityPositive?: {
-    experienceLineCount: number;
-    strongVerbCoverage: number;
-    quantifiedRatio: number;
-    templatePhrases: string[];
-    weakOpeners: string[];
-    passHint: string;
-  };
 }
 
-export const EditorView: React.FC<EditorViewProps> = ({ currentVersion, onSave, qualityPositive }) => {
+export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
   const pdfRef = useRef<HTMLDivElement>(null);
   const previewViewportRef = useRef<HTMLDivElement>(null);
   const [exportMessage, setExportMessage] = useState("");
@@ -54,6 +45,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion, onSave, 
   const [editedPdfUrl, setEditedPdfUrl] = useState("");
   const [reviewPdfUrl, setReviewPdfUrl] = useState("");
   const [fileSyncMessage, setFileSyncMessage] = useState("");
+  const [previewMode, setPreviewMode] = useState<"original" | "refined">("refined");
   const template = getVisibleResumeTemplates().find((item) => item.id === currentVersion?.templateId) || getVisibleResumeTemplates()[0];
   const resumeChanges = currentVersion?.changes || buildResumeChangeSet(sourceResume, editableResumeText);
   // A generated URL alone is not proof that the original PDF accepted a
@@ -144,18 +136,6 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion, onSave, 
     };
   }, [editableResumeText, editableOriginalHtml, editedPdfUrl, reviewPdfUrl]);
 
-  const handleSaveVersion = () => {
-    if (!onSave || !currentVersion) return;
-    const finalText = getEditedResumeText();
-    onSave({
-      ...currentVersion,
-      optimizedText: finalText,
-      experience: finalText,
-      updatedAt: new Date().toISOString()
-    });
-    setExportMessage("已保存版本，可在「我的版本」中查看。");
-  };
-
   const handleDownloadPdf = () => {
     if (!pdfRef.current || !canPublish) {
       setExportMessage(canSyncOriginalPdf && editedPdfUrl ? "这份模板暂未找到可安全写回的位置，已保留原文件；请调整后重试。" : "成品简历正在生成，请稍候几秒。");
@@ -179,17 +159,6 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion, onSave, 
     window.print();
   };
 
-  const getEditedResumeText = () => {
-    if (hasOriginalResumePreview) return editableResumeText;
-    const text = pdfRef.current?.innerText?.trim();
-    return text ? stripNonResumeNotes(text) : editableResumeText;
-  };
-
-  const handlePreviewBlur = () => {
-    if (hasOriginalResumePreview) return;
-    setEditableResumeText(getEditedResumeText());
-  };
-
   return (
     <section className="min-h-[calc(100vh-56px)] bg-slate-50 px-4 py-5 text-slate-950 sm:px-6">
       <div className="mx-auto max-w-[1100px]">
@@ -197,13 +166,9 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion, onSave, 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">成品简历</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">已直接在上传的原版简历中完成文字优化，红线标出本次修改。</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">保留原有模板与页数，只整理已有经历的表达。</p>
             </div>
             <div className="editor-header-actions flex flex-wrap gap-2">
-              <button type="button" onClick={handleSaveVersion} className="inline-flex h-10 items-center gap-2 rounded-sm border border-[#cbbcac] bg-white px-4 text-xs font-semibold text-[#1a3c34] hover:bg-[#f5f0eb]">
-                <Save size={14} />
-                保存版本
-              </button>
               <button type="button" onClick={handleDownloadPdf} disabled={!canPublish} className="inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33] disabled:cursor-not-allowed disabled:bg-slate-300">
                 <Download size={14} />
                 打印 / 保存 PDF
@@ -215,11 +180,10 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion, onSave, 
           </p>
         </div>
         <ChangeCompareCard changes={resumeChanges} />
-        {qualityPositive && <QualityMeterCard positive={qualityPositive} />}
         <div className="border border-slate-200 bg-[#e9ece8] p-4 sm:p-8">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-950">成品简历预览</h2>
-              <span className="text-xs text-slate-500">{hasOriginalResumePreview ? "原文件版式，展示优化后的内容" : "可直接点击文字修改"}</span>
+              <div className="flex gap-2" role="tablist" aria-label="简历对比"><button type="button" role="tab" aria-selected={previewMode === "original"} onClick={() => setPreviewMode("original")}>原版</button><button type="button" role="tab" aria-selected={previewMode === "refined"} onClick={() => setPreviewMode("refined")}>整理后</button></div>
+              <span className="text-xs text-slate-500">{previewMode === "original" ? "上传的原文件" : "可投递成稿"}</span>
             </div>
             <div
               ref={previewViewportRef}
@@ -230,21 +194,17 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion, onSave, 
                 ref={pdfRef}
                 className="resume-print-area mx-auto w-[210mm] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.12)] outline-none focus:ring-2 focus:ring-sky-500"
                 style={{ transform: `scale(${previewScale})`, transformOrigin: "top left" }}
-                contentEditable={!hasOriginalResumePreview}
-                suppressContentEditableWarning
                 spellCheck={false}
-                onBlur={handlePreviewBlur}
-                aria-label={hasOriginalResumePreview ? "原文件版式成品简历" : "可编辑成品简历"}
-                title={hasOriginalResumePreview ? "原文件版式，展示优化后的内容" : "可直接点击文字修改"}
+                aria-label={previewMode === "original" ? "原版简历" : "整理后的简历"}
               >
                 {shouldShowOriginalFile && originalResumeFileUrl ? (
-                  <PdfFilePreview src={reviewPdfUrl || originalResumeFileUrl} isUpdating={Boolean(fileSyncMessage.startsWith("正在"))} />
+                  <PdfFilePreview src={previewMode === "original" ? originalResumeFileUrl : editedPdfUrl || originalResumeFileUrl} isUpdating={Boolean(fileSyncMessage.startsWith("正在"))} />
                 ) : editableOriginalHtml ? (
                   <div className="original-resume-preview" dangerouslySetInnerHTML={{ __html: sanitizeHtml(editableOriginalHtml) }} />
                 ) : originalResumeFileUrl ? (
                   <iframe className="h-[297mm] w-full border-0 bg-white" src={originalResumeFileUrl} title="原始简历预览" />
                 ) : (
-                  <ResumeDocument text={editableResumeText} template={template} />
+                  <ResumeDocument text={previewMode === "original" ? sourceResume : editableResumeText} template={template} />
                 )}
               </div>
             </div>
@@ -350,7 +310,7 @@ function ChangeCompareCard({ changes }: { changes: Array<{ before: string; after
           <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1a3c34] px-1.5 text-[11px] font-bold text-white">
             {changes.length}
           </span>
-          本次优化改动
+          本次整理内容
         </h2>
         {changes.length > 4 && (
           <button type="button" className="text-xs font-medium text-[#71706b] hover:text-[#1a3c34]" onClick={() => setExpanded((v) => !v)}>
@@ -361,6 +321,7 @@ function ChangeCompareCard({ changes }: { changes: Array<{ before: string; after
       <div className="mt-3 space-y-2.5">
         {visible.map((change, index) => (
           <div key={index} className="grid grid-cols-1 gap-1.5 rounded-md border border-[#e1e9e4] bg-white p-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-3">
+            <span className="text-[11px] text-[#71706b]">{!change.after ? "已删减" : !change.before ? "已整理" : "已重写"}</span>
             <p className="text-xs leading-5 text-[#8a8a86] line-through decoration-[#b9b9b4] decoration-1">{change.before}</p>
             <span className="hidden text-[#b8860b] sm:block" aria-hidden="true">→</span>
             <span className="text-[#b8860b] sm:hidden" aria-hidden="true">↓</span>

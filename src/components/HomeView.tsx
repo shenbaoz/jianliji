@@ -2,11 +2,10 @@ import { memo, useState, type ReactNode } from "react";
 import { ArrowRight, Eye, FileUp, Lock, PenLine, RotateCcw } from "lucide-react";
 import { ResumeDocument } from "./ResumeDocument";
 import { PageShell } from "./ProductShell";
-import { sampleResumeCases } from "../data/sampleCases";
 import { parseResumeFile } from "../services/resumeFileParser";
 import { createOriginalResumePreview } from "../services/resumeOriginalPreview";
 import { getVisibleResumeTemplates } from "../services/templates";
-import type { ResumeInput, SampleResumeCase, WorkflowStep } from "../types";
+import type { ResumeInput } from "../types";
 
 const resumeUploadLimitBytes = 10 * 1024 * 1024;
 const resumeUploadLimitText = "10MB";
@@ -14,13 +13,13 @@ const resumeUploadLimitText = "10MB";
 type Props = {
   input: ResumeInput;
   onChange: (input: ResumeInput) => void;
-  onNext: () => void;
-  onLoadSample: (sample: SampleResumeCase, nextStep?: WorkflowStep) => void;
+  onRefine: () => void;
+  isRefining: boolean;
 };
 
 type MobileTab = "edit" | "preview";
 
-export const HomeView = memo(function HomeView({ input, onChange, onNext, onLoadSample }: Props) {
+export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRefining }: Props) {
   const [fileStatus, setFileStatus] = useState("");
   const [tab, setTab] = useState<MobileTab>("edit");
   const resumeLength = input.resumeText.trim().length;
@@ -70,7 +69,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onNext, onLoad
     <PageShell
       active="workspace"
       title="导入简历"
-      description="上传 PDF、DOCX，或直接粘贴文字；没有正式简历，也可以用样稿开始。"
+      description="上传 PDF、DOCX，或直接粘贴文字。图片、页数和原有版式会被保留。"
       actions={
         <div className="flex gap-2">
           {resumeLength > 0 && (
@@ -79,8 +78,8 @@ export const HomeView = memo(function HomeView({ input, onChange, onNext, onLoad
               清除
             </button>
           )}
-          <button type="button" className="inline-flex h-9 items-center gap-2 rounded-md bg-sky-700 px-4 text-xs font-semibold text-white hover:bg-sky-800 disabled:bg-slate-300" onClick={onNext} disabled={!canContinue}>
-            继续
+          <button type="button" className="inline-flex h-9 items-center gap-2 rounded-md bg-sky-700 px-4 text-xs font-semibold text-white hover:bg-sky-800 disabled:bg-slate-300" onClick={onRefine} disabled={!canContinue || isRefining}>
+            {isRefining ? "正在整理…" : "开始整理"}
             <ArrowRight size={14} />
           </button>
         </div>
@@ -111,19 +110,6 @@ export const HomeView = memo(function HomeView({ input, onChange, onNext, onLoad
               <input className="sr-only" type="file" accept=".txt,.pdf,.docx" onChange={(event) => handleFile(event.target.files?.[0])} />
             </label>
 
-            {!canContinue && (
-              <div className="mx-[-1.25rem] flex items-center pb-4 pt-6" aria-hidden="true">
-                <div className="flex-grow border-t border-slate-200" />
-                <span className="mx-2 mt-[-2px] flex-shrink text-sm text-slate-400">或</span>
-                <div className="flex-grow border-t border-slate-200" />
-              </div>
-            )}
-
-            {!canContinue && (
-              <button type="button" className="mx-auto block rounded-full border border-slate-300 px-6 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => onLoadSample(sampleResumeCases[0], "job")}>
-                用样稿继续
-              </button>
-            )}
           </div>
 
           <textarea

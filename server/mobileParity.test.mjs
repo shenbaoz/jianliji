@@ -4,24 +4,18 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("mobile views reuse generation and final export handlers", async () => {
-  const [app, creator, editor] = await Promise.all([
-    read("src/App.tsx"),
-    read("src/components/CreatorView.tsx"),
-    read("src/components/EditorView.tsx")
-  ]);
-
-  assert.match(app, /onGenerate=\{generateFromCreator\}/);
-  assert.match(creator, /await onGenerate\(creatorProfileToResumeInput\(profile\)\)/);
+test("mobile views reuse refinement and final export handlers", async () => {
+  const [app, editor] = await Promise.all([read("src/App.tsx"), read("src/components/EditorView.tsx")]);
+  assert.match(app, /onRefine=\{refine\}/);
   assert.match(editor, /onClick=\{handleDownloadPdf\}/);
   assert.doesNotMatch(editor, /onClick=\{handleSave\}/);
 });
 
-test("generation buttons do not pass a click event as resume input", async () => {
+test("refinement button does not pass a click event as resume input", async () => {
   const app = await read("src/App.tsx");
 
-  assert.doesNotMatch(app, /onGenerate=\{runGeneration\}/);
-  assert.match(app, /onGenerate=\{\(\) => void runGeneration\(\)\}/);
+  assert.doesNotMatch(app, /onRefine=\{refine\(\)\}/);
+  assert.match(app, /onRefine=\{refine\}/);
 });
 
 test("the A4 editor preview is scaled to its actual mobile container", async () => {
