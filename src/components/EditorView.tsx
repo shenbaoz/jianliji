@@ -56,7 +56,11 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion, onSave, 
   const [fileSyncMessage, setFileSyncMessage] = useState("");
   const template = getVisibleResumeTemplates().find((item) => item.id === currentVersion?.templateId) || getVisibleResumeTemplates()[0];
   const resumeChanges = currentVersion?.changes || buildResumeChangeSet(sourceResume, editableResumeText);
-  const canPublish = canSyncOriginalPdf ? Boolean(editedPdfUrl) : true;
+  // A generated URL alone is not proof that the original PDF accepted a
+  // safe text replacement. Never label an unchanged source PDF as refined.
+  const canPublish = canSyncOriginalPdf
+    ? Boolean(editedPdfUrl) && /已实际写回\s*\d+\s*处/.test(fileSyncMessage)
+    : true;
 
   useEffect(() => {
     setEditableResumeText(generatedResumeText);
@@ -154,7 +158,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion, onSave, 
 
   const handleDownloadPdf = () => {
     if (!pdfRef.current || !canPublish) {
-      setExportMessage("成品简历正在生成，请稍候几秒。");
+      setExportMessage(canSyncOriginalPdf && editedPdfUrl ? "这份模板暂未找到可安全写回的位置，已保留原文件；请调整后重试。" : "成品简历正在生成，请稍候几秒。");
       return;
     }
     if (canSyncOriginalPdf) {
