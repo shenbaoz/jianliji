@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("mobile views reuse desktop generation save and export handlers", async () => {
+test("mobile views reuse generation and final export handlers", async () => {
   const [app, creator, editor] = await Promise.all([
     read("src/App.tsx"),
     read("src/components/CreatorView.tsx"),
@@ -13,8 +13,8 @@ test("mobile views reuse desktop generation save and export handlers", async () 
 
   assert.match(app, /onGenerate=\{generateFromCreator\}/);
   assert.match(creator, /await onGenerate\(creatorProfileToResumeInput\(profile\)\)/);
-  assert.match(editor, /onClick=\{handleSave\}/);
   assert.match(editor, /onClick=\{handleDownloadPdf\}/);
+  assert.doesNotMatch(editor, /onClick=\{handleSave\}/);
 });
 
 test("generation buttons do not pass a click event as resume input", async () => {
@@ -47,7 +47,18 @@ test("shared pages expose the responsive presentation contract", async () => {
   assert.match(shell, /workflow-mobile-summary/);
   assert.match(home, /mobile-view-tabs/);
   assert.match(creator, /creator-step-progress/);
-  assert.match(editor, /editor-mobile-tabs/);
+  assert.doesNotMatch(editor, /editor-mobile-tabs/);
+  assert.match(editor, /max-w-\[1100px\]/);
   assert.match(css, /safe-area-inset-bottom/);
   assert.match(css, /@media\s*\(max-width:\s*767px\)/);
+});
+
+test("the resume preview recognizes the AI core-advantages section", async () => {
+  const documentSource = await read("src/components/ResumeDocument.tsx");
+
+  assert.match(documentSource, /sectionTitles[\s\S]*"核心优势"/);
+  assert.match(documentSource, /sectionTitles[\s\S]*"技能特长"/);
+  assert.doesNotMatch(documentSource, /contactParts\[0\][\s\S]*1\*{10}/);
+  assert.match(documentSource, /\{parsed\.phone &&/);
+  assert.match(documentSource, /\{parsed\.email &&/);
 });

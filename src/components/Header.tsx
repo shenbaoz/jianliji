@@ -1,28 +1,42 @@
-import { Bell, CircleHelp, UserRound } from "lucide-react";
+import { ArrowRight, BookOpen, Home } from "lucide-react";
 
-export function Header() {
+type HeaderProps = {
+  onOpenHome: () => void;
+  onOpenCases: () => void;
+  onOpenWorkspace: () => void;
+  onOpenCreator: () => void;
+  finalOnly?: boolean;
+  dark?: boolean;
+};
+
+export function Header({ onOpenHome, onOpenCases, onOpenWorkspace, onOpenCreator, finalOnly = false, dark }: HeaderProps) {
   return (
-    <header className="topbar">
-      <div className="brand">
-        <span className="brand-mark">岗</span>
+    <header className={dark ? "topbar topbar-dark" : "topbar"}>
+      <button type="button" className="brand-button" onClick={onOpenHome}>
+        <span className={dark ? "brand-mark brand-mark-dark" : "brand-mark"}>简</span>
         <div>
-          <strong>一岗一简历</strong>
-          <span>输入目标岗位，生成这一岗专用简历</span>
+          <strong>简历记</strong>
+          <span className="brand-tag">一份一投的简历</span>
         </div>
-      </div>
+      </button>
       <nav className="top-actions" aria-label="辅助导航">
-        <button type="button">
-          <CircleHelp size={16} />
-          使用指南
+        <button type="button" onClick={onOpenHome}>
+          <Home size={16} />
+          返回首页
         </button>
-        <button type="button">
-          <Bell size={16} />
-          通知
-        </button>
-        <button type="button" className="user-button">
-          <UserRound size={16} />
-          张同学
-        </button>
+        {!finalOnly && (
+          <>
+            <button type="button" onClick={onOpenCases}>
+              <BookOpen size={16} />
+              打开案例库
+            </button>
+            <button type="button" onClick={onOpenCreator}>从 0 创建</button>
+            <button type="button" className="user-button" onClick={onOpenWorkspace}>
+              开始优化
+              <ArrowRight size={16} />
+            </button>
+          </>
+        )}
       </nav>
     </header>
   );

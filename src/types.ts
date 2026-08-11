@@ -4,17 +4,26 @@ export type WorkflowStep =
   | "job"
   | "analysis"
   | "questions"
-  | "result"
   | "editor"
-  | "versions";
+  | "versions"
+  | "cases"
+  | "privacy"
+  | "creator";
 
-export type AppView = WorkflowStep | "admin";
+export type AppView = WorkflowStep;
 
 export type ResumeInput = {
   candidateName: string;
   targetRole: string;
+  candidateType?: "graduate" | "experienced" | "career-change";
   resumeText: string;
   jobDescription: string;
+  sourceMode?: "resume" | "creator";
+  originalResumeHtml?: string;
+  originalResumeFileName?: string;
+  originalResumeMimeType?: string;
+  originalResumeFileUrl?: string;
+  originalResumeDataUrl?: string;
 };
 
 export type SkillScore = {
@@ -31,12 +40,21 @@ export type AnalysisReport = {
   issues: string[];
   fixes: string[];
   skillScores: SkillScore[];
+  matchItems: MatchItem[];
+};
+
+export type MatchItem = {
+  requirement: string;
+  evidence: string;
+  status: "matched" | "missing";
 };
 
 export type FollowUpQuestion = {
   id: string;
   question: string;
   reason: string;
+  allowSkip?: boolean;
+  skipLabel?: string;
 };
 
 export type OptimizedBlock = {
@@ -45,12 +63,43 @@ export type OptimizedBlock = {
   after: string;
 };
 
+export type ResumeQualityPositive = {
+  experienceLineCount: number;
+  strongVerbCoverage: number;
+  quantifiedRatio: number;
+  templatePhrases: string[];
+  weakOpeners: string[];
+  passHint: string;
+};
+
+export type ResumeQuality = {
+  verdict: "ready" | "needs_evidence";
+  score: number;
+  checks: string[];
+  positive?: ResumeQualityPositive;
+};
+
 export type OptimizedResume = {
   summary: string;
   skills: string[];
   blocks: OptimizedBlock[];
   fullText: string;
   interviewScript: string[];
+  suggestions?: string[];
+  quality?: ResumeQuality;
+  provider?: "deepseek" | "kimi";
+  model?: string;
+  changes?: Array<{ before: string; after: string }>;
+};
+
+export type UniversalRefinement = {
+  text: string;
+  changes: Array<{ before: string; after: string }>;
+  quality: {
+    verdict: "ready" | "unchanged";
+    checks: string[];
+  };
+  safe: boolean;
 };
 
 export type ResumeTemplate = {
@@ -64,6 +113,10 @@ export type ResumeTemplate = {
 export type SavedResumeVersion = {
   id: string;
   createdAt: string;
+  updatedAt?: string;
+  name?: string;
+  title?: string;
+  experience?: string;
   candidateName: string;
   targetRole: string;
   score: number;
@@ -71,6 +124,23 @@ export type SavedResumeVersion = {
   resumeText: string;
   jobDescription: string;
   optimizedText: string;
+  changes?: Array<{ before: string; after: string }>;
+  originalResumeHtml?: string;
+  originalResumeFileName?: string;
+  originalResumeMimeType?: string;
+  originalResumeFileUrl?: string;
+  originalResumeDataUrl?: string;
+};
+
+export type UnlockInterest = {
+  id: string;
+  createdAt: string;
+  source: "analysis" | "result" | "editor";
+  candidateName: string;
+  targetRole: string;
+  planId: string;
+  contact: string;
+  note: string;
 };
 
 export type SampleResumeCase = {
@@ -81,4 +151,6 @@ export type SampleResumeCase = {
   summary: string;
   resumeText: string;
   jobDescription: string;
+  candidateType?: "graduate" | "experienced" | "career-change";
+  roleCategory?: "tech" | "product" | "operations" | "content" | "design" | "business" | "functional";
 };

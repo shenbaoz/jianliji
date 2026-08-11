@@ -1,0 +1,32 @@
+import { getApiBase } from "./apiBase";
+import { getVisitorHeaders } from "./storage";
+
+const apiBase = getApiBase();
+
+export async function createEditedPdfPreview(originalResumeFileUrl: string, text: string, changes: Array<{ before: string; after: string }>) {
+  const response = await fetch(`${apiBase}/api/edit-pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getVisitorHeaders() },
+    body: JSON.stringify({ originalResumeFileUrl, text, changes })
+  });
+  const payload = (await response.json().catch(() => null)) as { fileUrl?: string; reviewFileUrl?: string; changedLineCount?: number; appliedChanges?: Array<{ before?: unknown; after?: unknown }>; error?: string } | null;
+  if (!response.ok || !payload?.fileUrl || !payload.reviewFileUrl) {
+    throw new Error(payload?.error || "PDF 同步失败。");
+  }
+  return {
+    fileUrl: resolveApiUrl(payload.fileUrl),
+    reviewFileUrl: resolveApiUrl(payload.reviewFileUrl),
+    changedLineCount: Math.max(0, Number(payload.changedLineCount) || 0),
+    appliedChanges: Array.isArray(payload.appliedChanges)
+      ? payload.appliedChanges.flatMap((change) => {
+          const before = typeof change.before === "string" ? change.before.trim() : "";
+          const after = typeof change.after === "string" ? change.after.trim() : "";
+          return before && after ? [{ before, after }] : [];
+        })
+      : []
+  };
+}
+
+function resolveApiUrl(value: string) {
+  return value.startsWith("/api/") ? `${apiBase}${value}` : value;
+}
