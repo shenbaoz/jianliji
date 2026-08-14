@@ -95,15 +95,18 @@ export async function detectResumeFileType(buffer) {
 }
 
 export function normalizeResumeText(text) {
+  const seenLines = new Set();
   const lines = text
     .replace(/\r/g, "")
     .split("\n")
     .map((line) => normalizeSpacedChineseName(line.trimEnd()))
     .filter((line) => !/^--\s+\d+\s+of\s+\d+\s+--$/.test(line.trim()))
-    .filter((line, index, source) => {
+    .filter((line) => {
       if (!line.trim()) return true;
       const normalized = line.trim();
-      return source.findIndex((candidate) => candidate.trim() === normalized) === index || !isLikelyRepeatedPageHeader(normalized);
+      if (seenLines.has(normalized)) return !isLikelyRepeatedPageHeader(normalized);
+      seenLines.add(normalized);
+      return true;
     });
   const joined = [];
   for (const line of lines) {

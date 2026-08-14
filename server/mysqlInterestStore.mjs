@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { normalizeLead } from "./interestLead.mjs";
 
 const tableName = "unlock_interests";
 
@@ -55,6 +55,7 @@ note = VALUES(note)`,
           normalized.note
         ]
       );
+      await pruneToNewestFifty();
       return normalized;
     },
 
@@ -62,33 +63,18 @@ note = VALUES(note)`,
       await db.query(`DELETE FROM ${tableName} WHERE id = ?`, [id]);
     }
   };
-}
 
-function normalizeLead(lead) {
-  if (!lead || typeof lead !== "object") {
-    throw new Error("Interest payload is required");
+  // 与文件版保持一致:只保留最新的 50 条。
+  async function pruneToNewestFifty() {
+    await db.query(
+      `DELETE FROM ${tableName}
+WHERE id NOT IN (
+  SELECT id FROM (
+    SELECT id FROM ${tableName} ORDER BY created_at DESC, id DESC LIMIT 50
+  ) AS keep_ids
+)`
+    );
   }
-
-  const source = optionalText(lead.source);
-  const planId = optionalText(lead.planId);
-  if (!source || !planId) {
-    throw new Error("source and planId are required");
-  }
-
-  return {
-    id: optionalText(lead.id) || randomUUID(),
-    createdAt: optionalText(lead.createdAt) || new Date().toISOString(),
-    source,
-    candidateName: optionalText(lead.candidateName) || "未命名用户",
-    targetRole: optionalText(lead.targetRole) || "目标岗位",
-    planId,
-    contact: optionalText(lead.contact),
-    note: optionalText(lead.note)
-  };
-}
-
-function optionalText(value) {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function fromRow(row) {

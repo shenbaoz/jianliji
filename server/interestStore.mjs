@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
+import { normalizeLead } from "./interestLead.mjs";
 
 export function createInterestStore(filePath = null) {
   let memoryLeads = [];
@@ -43,29 +44,6 @@ export function createInterestStore(filePath = null) {
         else memoryLeads = next;
       });
     }
-  };
-}
-
-function normalizeLead(lead) {
-  if (!lead || typeof lead !== "object") {
-    throw new Error("Interest payload is required");
-  }
-
-  const source = optionalText(lead.source);
-  const planId = optionalText(lead.planId);
-  if (!source || !planId) {
-    throw new Error("source and planId are required");
-  }
-
-  return {
-    id: optionalText(lead.id) || randomUUID(),
-    createdAt: optionalText(lead.createdAt) || new Date().toISOString(),
-    source,
-    candidateName: optionalText(lead.candidateName) || "未命名用户",
-    targetRole: optionalText(lead.targetRole) || "目标岗位",
-    planId,
-    contact: optionalText(lead.contact),
-    note: optionalText(lead.note)
   };
 }
 

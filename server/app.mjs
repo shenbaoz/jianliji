@@ -8,6 +8,7 @@ import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { createEditedPdfVersions } from "./pdfEditor.mjs";
 import { detectResumeFileType, parseResumeFile, ResumeParseError } from "./resumeParser.mjs";
+import { interestSchema, versionSchema } from "./validation.mjs";
 
 const resumeUploadLimitBytes = 10 * 1024 * 1024;
 const resumeUploadLimitMessage = "文件过大，请上传 10MB 以内的 PDF、DOCX 或 TXT 简历。";
@@ -105,6 +106,18 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       res.status(204).end();
       return;
     }
+    next();
+  });
+
+  app.use((req, res, next) => {
+    const requestId = randomUUID().slice(0, 8);
+    const startedAt = process.hrtime.bigint();
+    res.setHeader("X-Request-Id", requestId);
+    res.locals.requestId = requestId;
+    res.on("finish", () => {
+      const ms = Number(process.hrtime.bigint() - startedAt) / 1e6;
+      console.log(`[http] ${requestId} ${req.method} ${req.originalUrl} ${res.statusCode} ${ms.toFixed(1)}ms`);
+    });
     next();
   });
 
@@ -214,7 +227,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       const before = await versionStore.listAll();
       const removed = before.filter((item) => item.id === req.params.id);
       await versionStore.deleteAny(req.params.id);
-      await deleteUnreferencedStoredFiles(uploadDir, removed, await versionStore.listAll());
+      await deleteUnreferencedStoredFiles(removed, await versionStore.listAll());
       res.status(204).end();
     } catch (error) {
       next(error);
@@ -308,7 +321,9 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
 
   app.post("/api/versions", async (req, res, next) => {
     try {
-      res.status(201).json(await versionStore.save(req.body, getVisitorId(req)));
+      const version = parseBody(versionSchema, req, res);
+      if (!version) return;
+      res.status(201).json(await versionStore.save(version, getVisitorId(req)));
     } catch (error) {
       next(error);
     }
@@ -320,7 +335,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       const before = await versionStore.list(visitorId);
       const removed = before.filter((item) => item.id === req.params.id);
       await versionStore.delete(req.params.id, visitorId);
-      await deleteUnreferencedStoredFiles(uploadDir, removed, await versionStore.list(visitorId));
+      await deleteUnreferencedStoredFiles(removed, await versionStore.list(visitorId));
       res.status(204).end();
     } catch (error) {
       next(error);
@@ -333,7 +348,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       const removed = await versionStore.list(visitorId);
       await versionStore.deleteAll(visitorId);
       const retained = typeof versionStore.listAll === "function" ? await versionStore.listAll() : [];
-      await deleteUnreferencedStoredFiles(uploadDir, removed, retained);
+      await deleteUnreferencedStoredFiles(removed, retained);
       res.status(204).end();
     } catch (error) {
       next(error);
@@ -390,7 +405,9 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
 
     app.post("/api/interest", interestLimiter, async (req, res, next) => {
       try {
-        res.status(201).json(await interestStore.save(req.body));
+        const lead = parseBody(interestSchema, req, res);
+        if (!lead) return;
+        res.status(201).json(await interestStore.save(lead));
       } catch (error) {
         next(error);
       }
@@ -436,9 +453,37 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       res.status(422).json({ error: error.message });
       return;
     }
-    console.error("[server error]", error);
+    console.error(`[server error] ${res.locals?.requestId || "-"}`, error);
     res.status(500).json({ error: "服务器内部错误，请稍后重试。" });
   });
+
+  // 删除已无任何版本引用的上传文件;删除前用全站最新引用再校验一次,
+  // 缩小「列出引用」与「删除文件」之间的并发窗口。
+  async function deleteUnreferencedStoredFiles(removedVersions, retainedVersions) {
+    const retainedNames = new Set(
+      retainedVersions
+        .map((version) => parseStoredFileUrl(version.originalResumeFileUrl)?.name)
+        .filter(Boolean)
+    );
+    const removedNames = new Set(
+      removedVersions
+        .map((version) => parseStoredFileUrl(version.originalResumeFileUrl)?.name)
+        .filter((name) => name && !retainedNames.has(name))
+    );
+    if (!removedNames.size) return;
+    const freshRetained = typeof versionStore.listAll === "function" ? await versionStore.listAll() : retainedVersions;
+    const stillReferenced = new Set(
+      freshRetained.map((version) => parseStoredFileUrl(version.originalResumeFileUrl)?.name).filter(Boolean)
+    );
+    await Promise.all(
+      [...removedNames]
+        .filter((name) => !stillReferenced.has(name))
+        .flatMap((name) => [
+          rm(join(uploadDir, name), { force: true }),
+          rm(join(uploadDir, `${name}.meta.json`), { force: true })
+        ])
+    );
+  }
 
   return app;
 }
@@ -533,23 +578,13 @@ function parseStoredFileUrl(value) {
   }
 }
 
-async function deleteUnreferencedStoredFiles(uploadDir, removedVersions, retainedVersions) {
-  const retainedNames = new Set(
-    retainedVersions
-      .map((version) => parseStoredFileUrl(version.originalResumeFileUrl)?.name)
-      .filter(Boolean)
-  );
-  const removedNames = new Set(
-    removedVersions
-      .map((version) => parseStoredFileUrl(version.originalResumeFileUrl)?.name)
-      .filter((name) => name && !retainedNames.has(name))
-  );
-  await Promise.all(
-    [...removedNames].flatMap((name) => [
-      rm(join(uploadDir, name), { force: true }),
-      rm(join(uploadDir, `${name}.meta.json`), { force: true })
-    ])
-  );
+function parseBody(schema, req, res) {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "提交内容格式不正确，请检查后重试。" });
+    return null;
+  }
+  return parsed.data;
 }
 
 function getVisitorId(req) {

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createInterestStore } from "./interestStore.mjs";
 
 function lead(overrides = {}) {
@@ -47,4 +50,24 @@ test("interest store deletes a lead by id", async () => {
   const leads = await store.list();
 
   assert.deepEqual(leads.map((item) => item.id), ["keep"]);
+});
+
+test("interest store file mode persists leads atomically and caps long fields", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "interest-store-"));
+  const filePath = join(dir, "leads.json");
+  const store = createInterestStore(filePath);
+  try {
+    await store.ensureSchema();
+    await store.save(lead({ id: "a".repeat(80), note: "b".repeat(3000) }));
+
+    const leads = await store.list();
+    assert.equal(leads.length, 1);
+    assert.equal(leads[0].id.length, 64);
+    assert.equal(leads[0].note.length, 2000);
+
+    const raw = JSON.parse(await readFile(filePath, "utf8"));
+    assert.equal(Array.isArray(raw), true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

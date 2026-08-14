@@ -38,6 +38,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
   const hasOriginalResumePreview = Boolean(originalResumeHtml || originalResumeFileUrl);
   const shouldShowOriginalFile = Boolean(originalResumeFileUrl && /pdf/i.test(originalResumeMimeType));
   const canSyncOriginalDocx = Boolean(/docx/i.test(originalResumeMimeType) && (originalResumeDataUrl || originalResumeFileUrl));
+  const docxTooLargeForSync = Boolean(originalResumeDataUrl && originalResumeDataUrl.length > 8_000_000);
   const canSyncOriginalPdf = Boolean(shouldShowOriginalFile && originalResumeFileUrl);
   const generatedResumeText = stripNonResumeNotes(currentVersion?.optimizedText || resumeExperience);
   const [editableResumeText, setEditableResumeText] = useState(generatedResumeText);
@@ -64,6 +65,10 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
 
   useEffect(() => {
     if (!canSyncOriginalDocx) return;
+    if (docxTooLargeForSync) {
+      setFileSyncMessage("DOCX 文件较大，已停用实时版式同步，右侧显示原文件。");
+      return;
+    }
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       setFileSyncMessage("正在同步到右侧版式...");
@@ -84,7 +89,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [canSyncOriginalDocx, editableResumeText, originalResumeDataUrl, originalResumeFileUrl]);
+  }, [canSyncOriginalDocx, docxTooLargeForSync, editableResumeText, originalResumeDataUrl, originalResumeFileUrl]);
 
   useEffect(() => {
     if (!canSyncOriginalPdf || !originalResumeFileUrl) return;

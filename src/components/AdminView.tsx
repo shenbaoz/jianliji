@@ -4,11 +4,9 @@ import {
   Download,
   Eye,
   FileText,
-  MessageSquareText,
   PackageCheck,
   RefreshCcw,
   Search,
-  Settings2,
   ShoppingCart,
   Trash2,
   UsersRound,
@@ -41,8 +39,6 @@ type AdminTab =
   | "orders"
   | "templates"
   | "pricing"
-  | "feedback"
-  | "interest"
   | "versions";
 
 const tabs: Array<{ id: AdminTab; label: string; icon: typeof BarChart3 }> = [
@@ -141,6 +137,8 @@ export function AdminView() {
     });
   }, [query, versions]);
 
+  const users = useMemo(() => buildUsers(versions, interest, query), [versions, interest, query]);
+
   const userCount = new Set([...versions.map((item) => item.candidateName), ...interest.map((item) => item.candidateName)]).size;
   const orderCount = interest.length;
   const avgScore = versions.length
@@ -178,16 +176,30 @@ export function AdminView() {
     downloadFile("unlock-interest.csv", toCsv(rows), "text/csv;charset=utf-8");
   };
 
+  const handleAdminError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : "操作失败，请稍后重试。";
+    if (message.includes("重新登录")) setAuthenticated(false);
+    window.alert(message);
+  };
+
   const removeInterest = async (id: string) => {
     if (!window.confirm("确定删除这条解锁意向？")) return;
-    await deleteUnlockInterest(id);
-    await refresh();
+    try {
+      await deleteUnlockInterest(id);
+      await refresh();
+    } catch (error) {
+      handleAdminError(error);
+    }
   };
 
   const removeVersion = async (id: string) => {
     if (!window.confirm("确定删除这个简历版本？")) return;
-    await deleteAdminVersion(id);
-    await refresh();
+    try {
+      await deleteAdminVersion(id);
+      await refresh();
+    } catch (error) {
+      handleAdminError(error);
+    }
   };
 
   const updatePricePlan = (id: string, field: keyof Omit<EditableUnlockPlan, "id" | "features">, value: string) => {
@@ -211,9 +223,13 @@ export function AdminView() {
   };
 
   const savePricing = () => {
-    savePricePlans(pricePlans);
-    setPricingSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
-    alert("价格配置已保存，前台付费入口会使用这份配置。");
+    try {
+      savePricePlans(pricePlans);
+      setPricingSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+      alert("价格配置已保存，前台付费入口会使用这份配置。");
+    } catch {
+      alert("保存失败：浏览器存储空间不足，请清理后重试。");
+    }
   };
 
   const restorePricing = () => {
@@ -227,9 +243,13 @@ export function AdminView() {
   };
 
   const saveTemplates = () => {
-    saveManagedTemplates(managedTemplates);
-    setTemplatesSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
-    alert("模板配置已保存，前台编辑器会使用已上架模板。");
+    try {
+      saveManagedTemplates(managedTemplates);
+      setTemplatesSavedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+      alert("模板配置已保存，前台编辑器会使用已上架模板。");
+    } catch {
+      alert("保存失败：浏览器存储空间不足，请清理后重试。");
+    }
   };
 
   const restoreTemplates = () => {
@@ -246,7 +266,7 @@ export function AdminView() {
     return (
       <main className="page-shell admin-shell">
         <section className="panel admin-hero-panel">
-          <span className="eyebrow">Admin</span>
+          <span className="eyebrow">管理台</span>
           <h1>管理台登录</h1>
           <p>请使用管理员密码访问用户留资与简历数据。</p>
           <form className="admin-login-form" onSubmit={submitLogin}>
@@ -289,7 +309,7 @@ export function AdminView() {
         <section className="panel admin-hero-panel">
           <div className="panel-title admin-title">
             <div>
-              <span className="eyebrow">Console</span>
+              <span className="eyebrow">控制台</span>
               <h1>管理总览</h1>
               <p>只保留日常经营最常用的数据：用户、订单线索、简历版本、模板和价格。</p>
             </div>
@@ -329,7 +349,7 @@ export function AdminView() {
           <section className="panel">
             <div className="panel-title">
               <div>
-                <span className="eyebrow">Overview</span>
+                <span className="eyebrow">总览</span>
                 <h2>数据总览</h2>
               </div>
             </div>
@@ -337,7 +357,7 @@ export function AdminView() {
               <ModuleGrid onOpen={setActive} />
               <div>
                 <h3>套餐热度</h3>
-                <PlanStats interest={interest} />
+                <PlanStats interest={interest} plans={pricePlans} />
               </div>
             </div>
           </section>
@@ -345,7 +365,7 @@ export function AdminView() {
 
         {active === "users" && (
           <section className="panel">
-            <PanelHeading eyebrow="Users" title="用户管理" />
+            <PanelHeading eyebrow="用户" title="用户管理" />
             <FilterBar
               query={query}
               onQuery={setQuery}
@@ -355,7 +375,7 @@ export function AdminView() {
               onExport={exportCsv}
             />
             <div className="admin-table">
-              {buildUsers(versions, interest, query).map((user) => (
+              {users.map((user) => (
                 <article className="admin-record-row" key={user.name}>
                   <div>
                     <strong>{user.name}</strong>
@@ -364,14 +384,14 @@ export function AdminView() {
                   </div>
                 </article>
               ))}
-              {buildUsers(versions, interest, query).length === 0 && <EmptyRow title="没有匹配用户" />}
+              {users.length === 0 && <EmptyRow title="没有匹配用户" />}
             </div>
           </section>
         )}
 
         {active === "orders" && (
           <section className="panel">
-            <PanelHeading eyebrow="Orders" title="订单线索" />
+            <PanelHeading eyebrow="订单" title="订单线索" />
             <FilterBar
               query={query}
               onQuery={setQuery}
@@ -388,7 +408,7 @@ export function AdminView() {
           <section className="panel">
             <div className="panel-title">
               <div>
-                <span className="eyebrow">Templates</span>
+                <span className="eyebrow">模板</span>
                 <h2>模板上下架</h2>
                 <p>关闭上架后，前台编辑器不会再显示这个模板。</p>
               </div>
@@ -441,7 +461,7 @@ export function AdminView() {
           <section className="panel">
             <div className="panel-title">
               <div>
-                <span className="eyebrow">Pricing</span>
+                <span className="eyebrow">价格</span>
                 <h2>价格配置</h2>
                 <p>修改后点保存，前台的解锁套餐会同步显示新价格和文案。</p>
               </div>
@@ -482,50 +502,9 @@ export function AdminView() {
           </section>
         )}
 
-        {active === "feedback" && (
-          <section className="panel">
-            <PanelHeading eyebrow="Feedback" title="反馈处理" />
-            <div className="admin-table">
-              {interest.filter((item) => item.note || item.contact).map((item) => (
-                <article className="admin-record-row" key={item.id}>
-                  <div>
-                    <strong>{item.candidateName} · {planName(item.planId)}</strong>
-                    <span>{item.note || "暂无文字反馈"}</span>
-                    <em>{item.contact || "未留联系方式"} · {formatDate(item.createdAt)}</em>
-                  </div>
-                  <div className="admin-row-actions">
-                    <button type="button" className="secondary-button" onClick={() => navigator.clipboard?.writeText(item.contact || item.note || "")}>
-                      复制
-                    </button>
-                    <button type="button" className="icon-button danger-button" aria-label="删除反馈" onClick={() => removeInterest(item.id)}>
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </article>
-              ))}
-              {interest.filter((item) => item.note || item.contact).length === 0 && <EmptyRow title="暂无反馈记录" />}
-            </div>
-          </section>
-        )}
-
-        {active === "interest" && (
-          <section className="panel">
-            <PanelHeading eyebrow="Leads" title="解锁意向" />
-            <FilterBar
-              query={query}
-              onQuery={setQuery}
-              planFilter={planFilter}
-              onPlanFilter={setPlanFilter}
-              plans={pricePlans}
-              onExport={exportCsv}
-            />
-            <InterestRows rows={filteredInterest} planName={planName} onDelete={removeInterest} />
-          </section>
-        )}
-
         {active === "versions" && (
           <section className="panel">
-            <PanelHeading eyebrow="Versions" title="简历版本" />
+            <PanelHeading eyebrow="版本" title="简历版本" />
             <FilterBar
               query={query}
               onQuery={setQuery}
@@ -640,8 +619,7 @@ function ModuleGrid({ onOpen }: { onOpen: (tab: AdminTab) => void }) {
   );
 }
 
-function PlanStats({ interest }: { interest: UnlockInterest[] }) {
-  const plans = loadPricePlans();
+function PlanStats({ interest, plans }: { interest: UnlockInterest[]; plans: EditableUnlockPlan[] }) {
   const max = Math.max(1, ...plans.map((plan) => interest.filter((item) => item.planId === plan.id).length));
   return (
     <div className="admin-stat-list">
@@ -680,7 +658,7 @@ function InterestRows({
             <em>{item.note || "无备注"} · {formatDate(item.createdAt)}</em>
           </div>
           <div className="admin-row-actions">
-            <button type="button" className="secondary-button" onClick={() => navigator.clipboard?.writeText(item.contact || "")}>
+            <button type="button" className="secondary-button" onClick={() => void navigator.clipboard?.writeText(item.contact || "").catch(() => window.alert("复制失败，请手动复制。"))}>
               复制联系
             </button>
             <button type="button" className="icon-button danger-button" aria-label="删除线索" onClick={() => onDelete(item.id)}>
@@ -699,7 +677,7 @@ function VersionPreview({ version }: { version: SavedResumeVersion | null }) {
     <aside className="panel admin-preview-panel">
       <div className="panel-title">
         <div>
-          <span className="eyebrow">Preview</span>
+          <span className="eyebrow">预览</span>
           <h2>版本预览</h2>
         </div>
       </div>
