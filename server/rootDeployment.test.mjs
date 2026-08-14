@@ -30,6 +30,15 @@ test("nginx serves only the isolated znhil deployment directory", async () => {
   assert.match(nginx, /ssl_certificate \/www\/server\/panel\/vhost\/cert\/znhil\.xyz\/fullchain\.pem;/);
 });
 
+test("resume-fit nginx snippet proxies the same backend port as the main config", async () => {
+  const main = await readFile("deploy/nginx-znhil.conf", "utf8");
+  const fit = await readFile("deploy/nginx-resume-fit.conf", "utf8");
+  const mainPort = main.match(/proxy_pass http:\/\/127\.0\.0\.1:(\d+);/)?.[1];
+  const fitPort = fit.match(/proxy_pass http:\/\/127\.0\.0\.1:(\d+);/)?.[1];
+  assert.ok(mainPort, "main config must define a backend port");
+  assert.equal(fitPort, mainPort, "resume-fit snippet must proxy the same backend port as the main config");
+});
+
 test("nginx serves PDF.js module workers with a JavaScript MIME type", async () => {
   const nginx = await readFile("deploy/nginx-znhil.conf", "utf8");
   assert.match(

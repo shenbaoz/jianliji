@@ -38,6 +38,9 @@ export default function App() {
       const normalized = { ...nextInput, targetRole: nextInput.targetRole.trim() || "通用求职版" };
       const refined = await optimizeWithDeepSeek(normalized);
       if (!refined.safe || !refined.text.trim()) throw new Error(refined.suggestions?.[0] || "信息较少，请补充一件你具体做过的事后再试。");
+      if (refined.quality?.verdict === "needs_evidence") {
+        throw new Error(refined.quality.checks?.[0] || "成稿缺少可核实的具体事实，请补充一两件带数字或结果的具体经历后再生成。");
+      }
       setInput(normalized);
       setResult({ text: refined.text, changes: refined.changes || [] });
       go("editor");

@@ -10,7 +10,7 @@ import type { SavedResumeVersion } from "../types";
 
 function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ["div", "span", "p", "br", "table", "tbody", "thead", "tr", "td", "th", "img", "ul", "ol", "li", "b", "strong", "i", "em", "u", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "section", "article"],
+    ALLOWED_TAGS: ["div", "span", "p", "br", "table", "tbody", "thead", "tr", "td", "th", "img", "ul", "ol", "li", "b", "strong", "i", "em", "u", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "section", "article", "style"],
     ALLOWED_ATTR: ["class", "style", "src", "alt", "width", "height", "colspan", "rowspan", "id"],
     FORBID_TAGS: ["script", "iframe", "object", "embed", "link", "meta"],
     FORBID_ATTR: ["onload", "onerror", "onclick", "onmouseover", "onfocus", "onblur"]

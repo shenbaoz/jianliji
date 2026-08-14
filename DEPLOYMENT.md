@@ -35,7 +35,7 @@ docker compose -f deploy/docker-compose.onlyoffice.yml up -d
 
 将 Document Server 仅绑定到本机 `127.0.0.1:8088`，然后使用 `deploy/nginx-znhil.conf` 中的 `/onlyoffice/` 反向代理。Node API 与 Document Server 必须使用同一个 `ONLYOFFICE_JWT_SECRET`；`ONLYOFFICE_CALLBACK_TOKEN` 必须是另一条至少 32 位的随机值。部署前须保留 ONLYOFFICE 的版权和许可证声明，并遵守其 AGPLv3 条款。
 
-接口固定监听 `127.0.0.1:3001`，不需要也不应开放 3001 公网端口。发布新版本时先运行 `npm ci && npm test && npm run build`，成功后再执行 `pm2 reload resume-fit-api --update-env`。
+接口固定监听 `127.0.0.1:3102`，不需要也不应开放 3102 公网端口。发布新版本时先运行 `npm ci && npm test && npm run build`，成功后再执行 `pm2 reload resume-fit-api --update-env`。
 
 ## 3. Nginx
 
@@ -44,7 +44,7 @@ docker compose -f deploy/docker-compose.onlyoffice.yml up -d
 ## 4. 上线检查
 
 ```bash
-curl http://127.0.0.1:3001/api/health
+curl http://127.0.0.1:3102/api/health
 curl -I https://你的域名/resume-fit/
 curl -I https://你的域名/resume-fit/api/health
 ```

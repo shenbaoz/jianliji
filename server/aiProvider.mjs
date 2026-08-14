@@ -224,18 +224,21 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
+          const retryable = response.status >= 500 || response.status === 429;
           const errMsg = payload?.error?.message || `${provider === "kimi" ? "Kimi" : "DeepSeek"} 请求失败，请稍后重试。`;
-          if (response.status >= 500 || response.status === 429) {
-            throw new Error(errMsg); // 可重试的服务端错误
-          }
-          throw new Error(errMsg); // 不可重试的客户端错误
+          const error = new Error(errMsg);
+          error.retryable = retryable;
+          throw error;
         }
         const content = payload?.choices?.[0]?.message?.content?.trim();
         if (!content) throw new Error(`${provider === "kimi" ? "Kimi" : "DeepSeek"} 未返回可用的简历内容。`);
         return content;
       } catch (error) {
         lastError = error;
-        if (attempt < 2 && error.message?.includes("请稍后重试")) {
+        const retryable = error?.retryable === true
+          || error?.name === "TimeoutError"
+          || error?.name === "AbortError";
+        if (attempt < 2 && retryable) {
           await sleep(Math.min(2000 * Math.pow(2, attempt), 8000));
           continue;
         }
