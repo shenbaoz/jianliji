@@ -5,3 +5,10 @@ dist/
 data/*.json
 data/uploads/
 npm-debug.log*
+
+# 发布产物与临时目录
+deploy/*.tar.gz
+release-*/
+tmp/
+__pycache__/
+*.pyc

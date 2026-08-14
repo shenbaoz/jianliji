@@ -32,8 +32,6 @@ export default defineConfig({
           const normalizedId = id.replace(/\\/g, "/");
           if (!normalizedId.includes("node_modules")) return;
           if (normalizedId.includes("node_modules/lucide-react")) return "vendor-icons";
-          if (normalizedId.includes("node_modules/html2canvas")) return "vendor-html2canvas";
-          if (normalizedId.includes("node_modules/jspdf")) return "vendor-jspdf";
           if (/node_modules\/(?:react|react-dom|scheduler)\//.test(normalizedId)) return "vendor-react";
           if (normalizedId.includes("node_modules")) return "vendor-common";
         }

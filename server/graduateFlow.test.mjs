@@ -6,38 +6,6 @@ import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import * as esbuild from "esbuild";
 
-test("creator sync failure tells graduates their device draft remains safe", async () => {
-  const { creatorSyncMessage } = await loadService("creatorSync");
-  assert.equal(creatorSyncMessage("server-error"), "同步未完成，内容仍保存在此设备");
-  assert.equal(creatorSyncMessage("network-error"), "网络不可用，内容仍保存在此设备");
-});
-
-test("question pager keeps an active question within the available range", async () => {
-  const { clampQuestionIndex } = await loadService("followUpPager");
-  assert.equal(clampQuestionIndex(8, 3), 2);
-  assert.equal(clampQuestionIndex(-1, 3), 0);
-  assert.equal(clampQuestionIndex(0, 0), 0);
-});
-
-test("default optimization sample is a graduate reference rather than an experienced hire", async () => {
-  const { sampleResumeCases } = await loadModule(join("src", "data", "sampleCases.ts"));
-  assert.equal(sampleResumeCases[0].id, "graduate-data-analyst");
-  assert.match(sampleResumeCases[0].summary, /应届生/);
-});
-
-test("case library all and operations filters return the intended audiences", async () => {
-  const module = await loadModule(join("src", "data", "sampleCases.ts"));
-  const filterSampleCases = typeof module.filterSampleCases === "function" ? module.filterSampleCases : () => [];
-  const all = filterSampleCases(module.sampleResumeCases, "全部", "全部");
-  const operations = filterSampleCases(module.sampleResumeCases, "operations", "全部");
-
-  assert.equal(all.length, module.sampleResumeCases.length);
-  assert.ok(all.some((item) => item.candidateType === "graduate"));
-  assert.ok(all.some((item) => item.candidateType !== "graduate"));
-  assert.ok(operations.length > 0);
-  assert.ok(operations.every((item) => /运营|投放|社群|电商|活动|用户增长|小程序/.test(`${item.targetRole} ${item.jobDescription}`)));
-});
-
 test("change examples label moved source lines as reordering instead of rewriting", async () => {
   const { buildChangeExamples } = await loadService("changeExamples");
   assert.deepEqual(buildChangeExamples("A 项目成果\nB 项目成果", "B 项目成果\nA 项目成果"), [

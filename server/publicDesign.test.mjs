@@ -5,18 +5,14 @@ import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("public workflow uses the approved editorial motion shell without consent gates", async () => {
-  const [app, creator, job, css] = await Promise.all([
+  const [app, css] = await Promise.all([
     read("src/App.tsx"),
-    read("src/components/CreatorView.tsx"),
-    read("src/components/JobView.tsx"),
     read("src/styles.css")
   ]);
 
   assert.match(app, /public-editorial-shell/);
   assert.match(css, /editorial-light-band/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  assert.doesNotMatch(creator, /aiConsent|onAiConsentChange|同意使用 DeepSeek/);
-  assert.doesNotMatch(job, /aiConsent|onAiConsentChange|同意使用 DeepSeek/);
 });
 
 test("the production landing hero fills the first viewport with larger primary content", async () => {

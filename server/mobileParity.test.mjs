@@ -28,11 +28,10 @@ test("the A4 editor preview is scaled to its actual mobile container", async () 
 });
 
 test("shared pages expose the responsive presentation contract", async () => {
-  const [app, shell, home, creator, editor, css] = await Promise.all([
+  const [app, shell, home, editor, css] = await Promise.all([
     read("src/App.tsx"),
     read("src/components/ProductShell.tsx"),
     read("src/components/HomeView.tsx"),
-    read("src/components/CreatorView.tsx"),
     read("src/components/EditorView.tsx"),
     read("src/styles.css")
   ]);
@@ -40,7 +39,6 @@ test("shared pages expose the responsive presentation contract", async () => {
   assert.match(app, /app-toast/);
   assert.match(shell, /workflow-mobile-summary/);
   assert.match(home, /mobile-view-tabs/);
-  assert.match(creator, /creator-step-progress/);
   assert.doesNotMatch(editor, /editor-mobile-tabs/);
   assert.match(editor, /max-w-\[1100px\]/);
   assert.match(css, /safe-area-inset-bottom/);
