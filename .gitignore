@@ -12,3 +12,7 @@ release-*/
 tmp/
 __pycache__/
 *.pyc
+
+# 浏览器自动化会话与截图产物
+.playwright-cli/
+output/
