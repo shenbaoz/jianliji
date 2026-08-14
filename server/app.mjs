@@ -66,7 +66,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
 
   const pdfEditLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 8,
+    max: 30,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "PDF 编辑请求过于频繁，请稍后重试。" }

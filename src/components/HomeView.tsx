@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from "react";
+import { memo, useRef, useState, type ReactNode } from "react";
 import { ArrowRight, Eye, FileUp, Lock, PenLine, RotateCcw } from "lucide-react";
 import { ResumeDocument } from "./ResumeDocument";
 import { PageShell } from "./ProductShell";
@@ -22,6 +22,7 @@ type MobileTab = "edit" | "preview";
 export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRefining }: Props) {
   const [fileStatus, setFileStatus] = useState("");
   const [tab, setTab] = useState<MobileTab>("edit");
+  const uploadSeq = useRef(0);
   const resumeLength = input.resumeText.trim().length;
   const canContinue = resumeLength > 20;
   const previewTemplate = getVisibleResumeTemplates()[0];
@@ -36,12 +37,14 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
       setFileStatus(`文件过大，请上传 ${resumeUploadLimitText} 以内的 PDF、DOCX 或 TXT 简历。`);
       return;
     }
+    const seq = ++uploadSeq.current;
     setFileStatus(`正在解析：${file.name}`);
     try {
       const [parsedResume, originalPreview] = await Promise.all([
         parseResumeFile(file),
         createOriginalResumePreview(file)
       ]);
+      if (seq !== uploadSeq.current) return;
       onChange({
         ...input,
         candidateName: input.candidateName.trim() || parsedResume.candidateName || "",
@@ -55,6 +58,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
       setFileStatus(`已解析：${file.name}`);
       setTab("preview");
     } catch (error) {
+      if (seq !== uploadSeq.current) return;
       setFileStatus(error instanceof Error ? error.message : "简历解析失败，请换一个文件试试。");
     }
   };

@@ -7,6 +7,13 @@ export type ManagedResumeTemplate = ResumeTemplate & {
 
 const templateKey = "resume-job-fit-admin-templates";
 
+let templatesCache: ManagedResumeTemplate[] | null = null;
+if (typeof window !== "undefined") {
+  window.addEventListener("templates-updated", () => {
+    templatesCache = null;
+  });
+}
+
 export function getDefaultManagedTemplates(): ManagedResumeTemplate[] {
   return resumeTemplates.map((template) => ({
     ...template,
@@ -16,6 +23,7 @@ export function getDefaultManagedTemplates(): ManagedResumeTemplate[] {
 
 export function loadManagedTemplates(): ManagedResumeTemplate[] {
   if (typeof window === "undefined") return getDefaultManagedTemplates();
+  if (templatesCache) return templatesCache;
 
   try {
     const raw = localStorage.getItem(templateKey);
@@ -23,11 +31,12 @@ export function loadManagedTemplates(): ManagedResumeTemplate[] {
     const saved = JSON.parse(raw) as ManagedResumeTemplate[];
     if (!Array.isArray(saved)) return getDefaultManagedTemplates();
 
-    return getDefaultManagedTemplates().map((defaultTemplate) => ({
+    templatesCache = getDefaultManagedTemplates().map((defaultTemplate) => ({
       ...defaultTemplate,
       ...saved.find((template) => template.id === defaultTemplate.id),
       id: defaultTemplate.id
     }));
+    return templatesCache;
   } catch {
     return getDefaultManagedTemplates();
   }

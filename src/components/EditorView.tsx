@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import DOMPurify from "dompurify";
 import { ResumeDocument } from "./ResumeDocument";
@@ -47,7 +47,10 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
   const [fileSyncMessage, setFileSyncMessage] = useState("");
   const [previewMode, setPreviewMode] = useState<"original" | "refined">("refined");
   const template = getVisibleResumeTemplates().find((item) => item.id === currentVersion?.templateId) || getVisibleResumeTemplates()[0];
-  const resumeChanges = currentVersion?.changes || buildResumeChangeSet(sourceResume, editableResumeText);
+  const resumeChanges = useMemo(
+    () => currentVersion?.changes || buildResumeChangeSet(sourceResume, editableResumeText),
+    [currentVersion?.changes, sourceResume, editableResumeText]
+  );
   // A generated URL alone is not proof that the original PDF accepted a
   // safe text replacement. Never label an unchanged source PDF as refined.
   const canPublish = canSyncOriginalPdf
@@ -100,7 +103,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
           setFileSyncMessage(error instanceof Error ? error.message : "PDF 同步失败。");
         }
       }
-    }, 700);
+    }, 1000);
 
     return () => {
       cancelled = true;
@@ -108,19 +111,22 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
     };
   }, [canSyncOriginalPdf, editableResumeText, originalResumeFileUrl, sourceResume]);
 
+  const updatePreviewScale = useCallback(() => {
+    const viewport = previewViewportRef.current;
+    const paper = pdfRef.current;
+    if (!viewport || !paper) return;
+    const availableWidth = viewport.clientWidth;
+    const paperWidth = paper.offsetWidth;
+    if (!availableWidth || !paperWidth) return;
+    const nextScale = Math.min(1, availableWidth / paperWidth);
+    setPreviewScale(nextScale);
+    setPreviewHeight(Math.ceil(paper.scrollHeight * nextScale));
+  }, []);
+
   useEffect(() => {
     const viewport = previewViewportRef.current;
     const paper = pdfRef.current;
     if (!viewport || !paper) return;
-
-    const updatePreviewScale = () => {
-      const availableWidth = viewport.clientWidth;
-      const paperWidth = paper.offsetWidth;
-      if (!availableWidth || !paperWidth) return;
-      const nextScale = Math.min(1, availableWidth / paperWidth);
-      setPreviewScale(nextScale);
-      setPreviewHeight(Math.ceil(paper.scrollHeight * nextScale));
-    };
 
     updatePreviewScale();
     const observer = new ResizeObserver(updatePreviewScale);
@@ -134,7 +140,11 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
       window.removeEventListener("resize", updatePreviewScale);
       window.cancelAnimationFrame(frame);
     };
-  }, [editableResumeText, editableOriginalHtml, editedPdfUrl, reviewPdfUrl]);
+  }, [updatePreviewScale]);
+
+  useEffect(() => {
+    updatePreviewScale();
+  }, [editableResumeText, editableOriginalHtml, editedPdfUrl, reviewPdfUrl, updatePreviewScale]);
 
   const handleDownloadPdf = () => {
     if (!pdfRef.current || !canPublish) {
@@ -329,52 +339,6 @@ function ChangeCompareCard({ changes }: { changes: Array<{ before: string; after
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function QualityMeterCard({ positive }: { positive: { experienceLineCount: number; strongVerbCoverage: number; quantifiedRatio: number; templatePhrases: string[]; weakOpeners: string[]; passHint: string } }) {
-  const metrics = [
-    {
-      label: "动词开头",
-      value: positive.strongVerbCoverage,
-      display: `${Math.round(positive.strongVerbCoverage * 100)}%`,
-      hint: positive.experienceLineCount ? `已评估 ${positive.experienceLineCount} 条经历描述` : "暂无可评估的经历描述"
-    },
-    {
-      label: "量化结果",
-      value: positive.quantifiedRatio,
-      display: `${Math.round(positive.quantifiedRatio * 100)}%`,
-      hint: "含数字/比例/量词的经历占比"
-    }
-  ];
-  const hasTemplate = positive.templatePhrases.length > 0;
-  const hasWeak = positive.weakOpeners.length > 0;
-
-  return (
-    <div className="mb-5 rounded-lg border border-[#d2e0d9] bg-[#f3f8f5] p-4 sm:p-5">
-      <h2 className="text-sm font-semibold text-[#1a3c34]">成稿质量达标度</h2>
-      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {metrics.map((metric) => (
-          <div key={metric.label}>
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-medium text-[#20211f]">{metric.label}</span>
-              <span className="font-semibold text-[#1a3c34]">{metric.display}</span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#e1e9e4]">
-              <div className="h-full rounded-full bg-[#1a3c34]" style={{ width: `${Math.round(Math.min(1, Math.max(0, metric.value)) * 100)}%` }} />
-            </div>
-            <p className="mt-1 text-[11px] text-[#71706b]">{metric.hint}</p>
-          </div>
-        ))}
-      </div>
-      {(hasTemplate || hasWeak) && (
-        <div className="mt-3 rounded-md border border-[#ecdcc3] bg-[#faf4e8] p-3 text-xs leading-5 text-[#6b5b3e]">
-          {hasTemplate && <p>· 删除空泛描述：{positive.templatePhrases.join("、")}</p>}
-          {hasWeak && <p>· 弱开头待强化：{positive.weakOpeners.slice(0, 3).join("；")}</p>}
-          {positive.passHint && <p>· 建议：{positive.passHint}</p>}
-        </div>
-      )}
     </div>
   );
 }
