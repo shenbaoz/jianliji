@@ -46,9 +46,9 @@ chmod 600 "$test_env"
 # The live container predates the current production-config minimum; keep this
 # one-time staging credential isolated from the production env file.
 if grep -q '^ADMIN_PASSWORD=' "$test_env"; then
-  sed -i 's/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=staging-only-20260810-password-very-long/' "$test_env"
+  sed -i 's/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=V7xQ2mL9rT4kW8zN6cH3pD/' "$test_env"
 else
-  printf '\nADMIN_PASSWORD=staging-only-20260810-password-very-long\n' >> "$test_env"
+  printf '\nADMIN_PASSWORD=V7xQ2mL9rT4kW8zN6cH3pD\n' >> "$test_env"
 fi
 old_image=$(docker inspect "$live_container" --format '{{.Config.Image}}')
 

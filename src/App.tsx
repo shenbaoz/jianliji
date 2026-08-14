@@ -2,10 +2,10 @@ import { lazy, Suspense, useRef, useState } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Header } from "./components/Header";
 import { LandingView } from "./components/LandingView";
-import { optimizeUniversalResume } from "./services/aiOptimize";
+import { optimizeWithDeepSeek } from "./services/aiOptimize";
+import { ResumeStartView } from "./components/ResumeStartView";
 import type { AppView, ResumeInput, SavedResumeVersion } from "./types";
 
-const HomeView = lazy(() => import("./components/HomeView").then((module) => ({ default: module.HomeView })));
 const EditorView = lazy(() => import("./components/EditorView").then((module) => ({ default: module.EditorView })));
 
 const initialInput: ResumeInput = { candidateName: "", targetRole: "", resumeText: "", jobDescription: "" };
@@ -23,21 +23,23 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "auto" });
   };
   const updateInput = (next: ResumeInput) => {
-    setInput({ ...next, targetRole: "", jobDescription: "" });
+    setInput({ ...next, jobDescription: "" });
     setResult(null);
   };
-  const refine = async () => {
-    if (inFlight.current || input.resumeText.trim().length < 21) {
-      setMessage("请先导入一份可读取的简历。");
+  const refine = async (nextInput: ResumeInput) => {
+    if (inFlight.current || nextInput.resumeText.trim().length < 11) {
+      setMessage(nextInput.sourceMode === "creator" ? "请先写下你做过的一件具体事情。" : "请先导入一份可读取的简历。");
       return;
     }
     inFlight.current = true;
     setIsRefining(true);
     setMessage("");
     try {
-      const refined = await optimizeUniversalResume(input.resumeText);
-      if (!refined.safe || !refined.changes.length) throw new Error("这份简历暂未找到可安全整理的内容，原文件不会被改动。");
-      setResult({ text: refined.text, changes: refined.changes });
+      const normalized = { ...nextInput, targetRole: nextInput.targetRole.trim() || "通用求职版" };
+      const refined = await optimizeWithDeepSeek(normalized);
+      if (!refined.safe || !refined.text.trim()) throw new Error(refined.suggestions?.[0] || "信息较少，请补充一件你具体做过的事后再试。");
+      setInput(normalized);
+      setResult({ text: refined.text, changes: refined.changes || [] });
       go("editor");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "暂时无法完成整理，请稍后再试。");
@@ -60,9 +62,9 @@ export default function App() {
     {isRefining && <RefiningOverlay />}
     <main><ErrorBoundary><Suspense fallback={<div className="page-shell">正在打开…</div>}>
       {view === "home" && <LandingView onNavigate={go} />}
-      {view === "workspace" && <HomeView input={input} onChange={updateInput} onRefine={refine} isRefining={isRefining} />}
+      {view === "workspace" && <ResumeStartView input={input} onChange={updateInput} onGenerate={refine} isGenerating={isRefining} />}
       {view === "editor" && version && <EditorView currentVersion={version} />}
-      {view === "editor" && !version && <HomeView input={input} onChange={updateInput} onRefine={refine} isRefining={isRefining} />}
+      {view === "editor" && !version && <ResumeStartView input={input} onChange={updateInput} onGenerate={refine} isGenerating={isRefining} />}
     </Suspense></ErrorBoundary></main>
   </div>;
 }

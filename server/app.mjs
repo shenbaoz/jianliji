@@ -110,10 +110,10 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       }
       const { resumeText, targetRole, jobDescription = "", evidenceAnswers = [], sourceMode = "resume" } = req.body || {};
       const isUniversal = sourceMode === "universal";
+      const normalizedTargetRole = typeof targetRole === "string" && targetRole.trim() ? targetRole.trim() : "通用求职版";
       if (
         typeof resumeText !== "string" || !resumeText.trim() ||
         (!isUniversal && (
-          typeof targetRole !== "string" || !targetRole.trim() ||
           typeof jobDescription !== "string"
         ))
       ) {
@@ -132,7 +132,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       }
       const result = isUniversal && typeof aiClient.optimizeUniversal === "function"
         ? await aiClient.optimizeUniversal({ resumeText })
-        : await aiClient.optimize({ resumeText, targetRole, jobDescription, evidenceAnswers: safeEvidenceAnswers, sourceMode: isUniversal ? "universal" : (sourceMode === "creator" ? "creator" : "resume"), skippedFollowUp: req.body?.skippedFollowUp === true });
+        : await aiClient.optimize({ resumeText, targetRole: normalizedTargetRole, jobDescription, evidenceAnswers: safeEvidenceAnswers, sourceMode: isUniversal ? "universal" : (sourceMode === "creator" ? "creator" : "resume"), skippedFollowUp: req.body?.skippedFollowUp === true });
       const text = typeof result?.text === "string"
         ? result.text
           .replace(/\{\{(?:PHONE|EMAIL)_\d+\}\}/g, "")

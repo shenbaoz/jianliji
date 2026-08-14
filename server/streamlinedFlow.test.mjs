@@ -4,24 +4,26 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("public refinement starts from an uploaded resume and never asks for a role or job description", async () => {
-  const [app, home] = await Promise.all([read("src/App.tsx"), read("src/components/HomeView.tsx")]);
+test("public start view offers simple existing-resume and novice paths without a job description", async () => {
+  const [app, start] = await Promise.all([read("src/App.tsx"), read("src/components/ResumeStartView.tsx")]);
 
-  assert.match(app, /optimizeUniversalResume/);
-  assert.doesNotMatch(app, /JobView|ReportView|FollowUpView|CreatorView|CaseLibraryView/);
-  assert.doesNotMatch(home, /onLoadSample|样稿|目标岗位|岗位 JD/);
-  assert.match(home, /onRefine/);
+  assert.match(app, /optimizeWithDeepSeek/);
+  assert.match(start, /我有简历，帮我优化/);
+  assert.match(start, /我是小白，从零开始/);
+  assert.match(start, /求职方向/);
+  assert.doesNotMatch(start, /岗位 JD/);
 });
 
 test("public refinement shows neutral progress and does not expose AI, score, or diagnostic language", async () => {
-  const [app, landing, editor] = await Promise.all([
+  const [app, start, landing, editor] = await Promise.all([
     read("src/App.tsx"),
+    read("src/components/ResumeStartView.tsx"),
     read("src/components/LandingView.tsx"),
     read("src/components/EditorView.tsx")
   ]);
-  const publicSurface = `${app}\n${landing}\n${editor}`;
+  const publicSurface = `${start}\n${landing}\n${editor}`;
 
-  assert.match(publicSurface, /正在整理你的简历/);
+  assert.match(app, /正在整理你的简历/);
   assert.doesNotMatch(publicSurface, /DeepSeek|Kimi|AI |ATS|评分|匹配度|岗位分析|招聘者质检/);
 });
 
@@ -35,9 +37,9 @@ test("completion presents original and refined views, concrete changes, and one 
   assert.doesNotMatch(editor, /onClick=\{handleSaveVersion\}|qualityPositive && <QualityMeterCard|contentEditable/);
 });
 
-test("the public header contains only home and refine navigation", async () => {
+test("the public header contains only home and resume navigation", async () => {
   const header = await read("src/components/Header.tsx");
 
-  assert.doesNotMatch(header, /案例库|从 0 创建|onOpenCases|onOpenCreator/);
-  assert.match(header, /开始整理/);
+  assert.doesNotMatch(header, /案例库|onOpenCases/);
+  assert.match(header, /开始做简历/);
 });

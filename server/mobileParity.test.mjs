@@ -6,7 +6,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("mobile views reuse refinement and final export handlers", async () => {
   const [app, editor] = await Promise.all([read("src/App.tsx"), read("src/components/EditorView.tsx")]);
-  assert.match(app, /onRefine=\{refine\}/);
+  assert.match(app, /onGenerate=\{refine\}/);
   assert.match(editor, /onClick=\{handleDownloadPdf\}/);
   assert.doesNotMatch(editor, /onClick=\{handleSave\}/);
 });
@@ -14,8 +14,8 @@ test("mobile views reuse refinement and final export handlers", async () => {
 test("refinement button does not pass a click event as resume input", async () => {
   const app = await read("src/App.tsx");
 
-  assert.doesNotMatch(app, /onRefine=\{refine\(\)\}/);
-  assert.match(app, /onRefine=\{refine\}/);
+  assert.doesNotMatch(app, /onGenerate=\{refine\(\)\}/);
+  assert.match(app, /onGenerate=\{refine\}/);
 });
 
 test("the A4 editor preview is scaled to its actual mobile container", async () => {

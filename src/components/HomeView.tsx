@@ -68,8 +68,8 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
   return (
     <PageShell
       active="workspace"
-      title="导入简历"
-      description="上传 PDF、DOCX，或直接粘贴文字。图片、页数和原有版式会被保留。"
+      title="优化已有简历"
+      description="上传 PDF、DOCX，或直接粘贴文字。选择求职方向后直接生成，不需要岗位 JD。"
       actions={
         <div className="flex gap-2">
           {resumeLength > 0 && (
@@ -96,6 +96,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
           </div>
 
           <div className="border-b border-slate-200 p-5">
+            <label className="mb-4 block text-sm font-semibold text-slate-800">求职方向 <span className="font-normal text-slate-500">（可选）</span><input className="mt-2 h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-normal" value={input.targetRole === "通用求职版" ? "" : input.targetRole} onChange={(event) => update("targetRole", event.target.value)} placeholder="例如：新媒体运营；不填则生成通用求职版" /></label>
             <label className="flex min-h-44 cursor-pointer justify-center rounded-md border-2 border-dashed border-slate-300 px-6 py-9 hover:border-sky-400">
               <span className="text-center">
                 <FileUp size={44} className="mx-auto text-sky-700" />
