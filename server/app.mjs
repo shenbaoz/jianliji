@@ -15,7 +15,9 @@ const defaultUploadDir = resolve("data", "uploads");
 
 export function createApp(versionStore, interestStore = null, storageStatus = null, creatorStore = null, aiClient = null, options = {}) {
   const app = express();
-  const adminSessions = new Set();
+  const adminSessions = new Map();
+  const adminSessionTtlMs = 8 * 60 * 60 * 1000;
+  const healthCheck = typeof options.healthCheck === "function" ? options.healthCheck : null;
   const uploadDir = options.uploadDir || defaultUploadDir;
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -35,7 +37,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
   });
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: resumeUploadLimitBytes }
+    limits: { fileSize: resumeUploadLimitBytes, files: 1, fields: 20, parts: 30 }
   });
 
   const generalLimiter = rateLimit({
@@ -78,6 +80,14 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
     message: { error: "登录尝试过于频繁，请 15 分钟后再试。" }
   });
 
+  const interestLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "提交过于频繁，请稍后重试。" }
+  });
+
   app.use(generalLimiter);
 
   app.use(express.json({ limit: "2mb" }));
@@ -98,8 +108,13 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
     next();
   });
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ ok: true });
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const healthy = healthCheck ? await healthCheck() : true;
+      res.status(healthy ? 200 : 503).json({ ok: healthy });
+    } catch {
+      res.status(503).json({ ok: false });
+    }
   });
 
   app.post("/api/ai/optimize", aiLimiter, async (req, res, next) => {
@@ -168,13 +183,13 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       return;
     }
     const token = randomUUID();
-    adminSessions.add(token);
+    adminSessions.set(token, Date.now() + adminSessionTtlMs);
     res.cookie("resume_admin_session", token, {
       httpOnly: true,
       sameSite: "strict",
       secure: req.secure || req.get("X-Forwarded-Proto") === "https",
       path: adminCookiePath(),
-      maxAge: 8 * 60 * 60 * 1000
+      maxAge: adminSessionTtlMs
     });
     res.status(204).end();
   });
@@ -208,6 +223,10 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
 
   app.post("/api/parse-resume", uploadLimiter, upload.single("resume"), async (req, res, next) => {
     try {
+      if (!req.file) {
+        res.status(400).json({ error: "请上传简历文件（PDF、DOCX 或 TXT）。" });
+        return;
+      }
       const parsed = await parseResumeFile(req.file);
       const detectedType = await detectResumeFileType(req.file.buffer);
       const savedFile = await saveUploadedResumeFile(req.file, uploadDir, getVisitorId(req), detectedType);
@@ -369,7 +388,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       }
     });
 
-    app.post("/api/interest", async (req, res, next) => {
+    app.post("/api/interest", interestLimiter, async (req, res, next) => {
       try {
         res.status(201).json(await interestStore.save(req.body));
       } catch (error) {
@@ -436,7 +455,12 @@ function requireAdmin(sessions) {
 
 function isAdmin(req, sessions) {
   const token = readCookie(req, "resume_admin_session");
-  return Boolean(token && sessions.has(token));
+  if (!token || !sessions.has(token)) return false;
+  if (Date.now() > sessions.get(token)) {
+    sessions.delete(token);
+    return false;
+  }
+  return true;
 }
 
 function readCookie(req, name) {
@@ -530,7 +554,7 @@ async function deleteUnreferencedStoredFiles(uploadDir, removedVersions, retaine
 
 function getVisitorId(req) {
   const visitorId = req.get("X-Visitor-Id");
-  if (typeof visitorId !== "string" || !/^[a-zA-Z0-9_-]{8,80}$/.test(visitorId)) {
+  if (typeof visitorId !== "string" || !/^[a-zA-Z0-9_-]{16,80}$/.test(visitorId)) {
     throw new Error("Visitor id is required");
   }
   return visitorId;

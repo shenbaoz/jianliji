@@ -23,20 +23,29 @@ const cleanupIntervalMs = Number(process.env.UPLOAD_CLEANUP_INTERVAL_MINUTES || 
 
 let dbPool = null;
 let cleanupTimer = null;
+let cleanupRunning = false;
+let server = null;
 
 const { versionStore, interestStore, creatorStore, storageStatus } = await createStores();
 
 const deepSeekClient = process.env.DEEPSEEK_API_KEY ? createDeepSeekClient() : null;
 const kimiClient = process.env.KIMI_API_KEY ? createKimiClient() : null;
 const aiClient = createFallbackAiClient(deepSeekClient, kimiClient);
-const app = createApp(versionStore, interestStore, storageStatus, creatorStore, aiClient);
-app.listen(port, process.env.BACKEND_HOST || "127.0.0.1", () => {
+const healthCheck = async () => {
+  if (!dbPool) return true;
+  await dbPool.query("SELECT 1");
+  return true;
+};
+const app = createApp(versionStore, interestStore, storageStatus, creatorStore, aiClient, { healthCheck });
+server = app.listen(port, process.env.BACKEND_HOST || "127.0.0.1", () => {
   console.log(`Resume backend listening on http://127.0.0.1:${port}`);
   startUploadCleanup();
 });
 
 function startUploadCleanup() {
   cleanupTimer = setInterval(async () => {
+    if (cleanupRunning) return;
+    cleanupRunning = true;
     try {
       const files = await readdir(uploadDir).catch(() => []);
       const now = Date.now();
@@ -54,6 +63,8 @@ function startUploadCleanup() {
       }
     } catch (error) {
       console.warn("[cleanup] Upload cleanup failed:", error.message);
+    } finally {
+      cleanupRunning = false;
     }
   }, cleanupIntervalMs);
 
@@ -63,19 +74,37 @@ function startUploadCleanup() {
 async function gracefulShutdown(signal) {
   console.log(`\n[${signal}] Shutting down gracefully...`);
   if (cleanupTimer) clearInterval(cleanupTimer);
+  const forceExit = setTimeout(() => {
+    console.warn("[shutdown] Forcing exit after timeout.");
+    process.exit(1);
+  }, 10_000);
+  forceExit.unref();
   try {
+    if (server) {
+      server.closeIdleConnections?.();
+      await new Promise((resolve) => server.close(() => resolve()));
+      console.log("[shutdown] HTTP server closed.");
+    }
     if (dbPool) {
       await dbPool.end();
       console.log("[shutdown] MySQL pool closed.");
     }
   } catch (error) {
-    console.warn("[shutdown] Error closing MySQL pool:", error.message);
+    console.warn("[shutdown] Error during shutdown:", error.message);
   }
   process.exit(0);
 }
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+  process.exit(1);
+});
+process.on("uncaughtException", (error) => {
+  console.error("[uncaughtException]", error);
+  process.exit(1);
+});
 
 async function createStores() {
   const hasDbConfig = process.env.DB_HOST && process.env.DB_NAME;

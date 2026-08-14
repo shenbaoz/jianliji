@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { randomUUID } from "node:crypto";
 
 export function createFileVersionStore(filePath) {
   let writeQueue = Promise.resolve();
@@ -17,6 +18,7 @@ export function createFileVersionStore(filePath) {
     },
 
     async list(visitorId) {
+      await writeQueue;
       const versions = await readVersions(filePath);
       return versions
         .filter((item) => item.visitorId === visitorId)
@@ -25,6 +27,7 @@ export function createFileVersionStore(filePath) {
     },
 
     async listAll(limit = 1000) {
+      await writeQueue;
       const versions = await readVersions(filePath);
       return versions
         .slice()
@@ -92,5 +95,7 @@ async function readVersions(filePath) {
 
 async function writeVersions(filePath, versions) {
   await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(versions, null, 2)}\n`, "utf8");
+  const tempPath = `${filePath}.${randomUUID()}.tmp`;
+  await writeFile(tempPath, `${JSON.stringify(versions, null, 2)}\n`, "utf8");
+  await rename(tempPath, filePath);
 }

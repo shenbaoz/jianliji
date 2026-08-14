@@ -4,13 +4,18 @@ import type { SavedResumeVersion, UnlockInterest } from "../types";
 const key = "resume-job-fit-versions";
 const interestKey = "resume-job-fit-unlock-interest";
 const visitorKey = "resume-job-fit-visitor-id";
+const visitorPattern = /^[a-zA-Z0-9_-]{16,80}$/;
 const apiBase = getApiBase();
 
 function getVisitorId() {
   let visitorId = localStorage.getItem(visitorKey);
-  if (!visitorId) {
+  if (!visitorId || !visitorPattern.test(visitorId)) {
     visitorId = crypto.randomUUID();
-    localStorage.setItem(visitorKey, visitorId);
+    try {
+      localStorage.setItem(visitorKey, visitorId);
+    } catch (error) {
+      console.warn("Visitor id could not be persisted.", error);
+    }
   }
   return visitorId;
 }

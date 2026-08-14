@@ -275,7 +275,7 @@ test("AI optimize endpoint uses the configured provider and never receives raw c
   try {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/api/ai/optimize`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Visitor-Id": "ai-a1b2c3d4" },
+      headers: { "Content-Type": "application/json", "X-Visitor-Id": "ai-visitor-a1b2c3d4" },
       body: JSON.stringify({ resumeText: "张三 13812345678", targetRole: "产品运营", jobDescription: "负责活动" })
     });
     assert.equal(response.status, 200);

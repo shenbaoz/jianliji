@@ -64,8 +64,17 @@ export async function detectResumeFileType(buffer) {
   if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
     try {
       const archive = await JSZip.loadAsync(buffer);
+      const uncompressedLimitBytes = Number(process.env.DOCX_UNCOMPRESSED_LIMIT_MB || 100) * 1024 * 1024;
+      const oversized = Object.values(archive.files).some((entry) => {
+        const size = entry?._data?.uncompressedSize;
+        return typeof size === "number" && size > uncompressedLimitBytes;
+      });
+      if (oversized) {
+        throw new ResumeParseError("DOCX 解压后体积过大，请精简文档中的图片或内容后重试。");
+      }
       if (archive.file("[Content_Types].xml") && archive.file("word/document.xml")) return "docx";
-    } catch {
+    } catch (error) {
+      if (error instanceof ResumeParseError) throw error;
       return null;
     }
     return null;

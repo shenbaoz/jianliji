@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { randomUUID } from "node:crypto";
 
 export function createInterestStore(filePath = null) {
   let memoryLeads = [];
@@ -18,6 +19,7 @@ export function createInterestStore(filePath = null) {
     },
 
     async list() {
+      await writeQueue;
       const leads = filePath ? await readLeads(filePath) : memoryLeads;
       return [...leads].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50);
     },
@@ -56,7 +58,7 @@ function normalizeLead(lead) {
   }
 
   return {
-    id: optionalText(lead.id) || crypto.randomUUID(),
+    id: optionalText(lead.id) || randomUUID(),
     createdAt: optionalText(lead.createdAt) || new Date().toISOString(),
     source,
     candidateName: optionalText(lead.candidateName) || "未命名用户",
@@ -84,5 +86,7 @@ async function readLeads(filePath) {
 
 async function writeLeads(filePath, leads) {
   await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(leads, null, 2)}\n`, "utf8");
+  const tempPath = `${filePath}.${randomUUID()}.tmp`;
+  await writeFile(tempPath, `${JSON.stringify(leads, null, 2)}\n`, "utf8");
+  await rename(tempPath, filePath);
 }

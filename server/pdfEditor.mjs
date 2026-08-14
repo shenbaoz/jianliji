@@ -138,6 +138,8 @@ function getValidatedChanges(changes) {
 function runPyMuPdfEditor(payload) {
   const python = process.env.PYMUPDF_PYTHON || (process.platform === "win32" ? "python" : "python3");
   const script = join(process.cwd(), "server", "vendor", "pymupdf_official_replace.py");
+  const timeoutMs = Number(process.env.PYMUPDF_TIMEOUT_MS || 120_000);
+  const outputLimit = 2 * 1024 * 1024;
   return new Promise((resolve, reject) => {
     const child = spawn(python, [script], {
       cwd: process.cwd(),
@@ -146,20 +148,38 @@ function runPyMuPdfEditor(payload) {
     });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    const settle = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      callback();
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      settle(() => reject(new Error("PDF 精修超时，请稍后重试或换一份简历。")));
+    }, timeoutMs);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.on("error", () => reject(new Error("PDF 精修组件未安装，请安装 requirements-pdf.txt 中的依赖。")));
+    child.stdout.on("data", (chunk) => {
+      if (stdout.length < outputLimit) stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      if (stderr.length < outputLimit) stderr += chunk;
+    });
+    child.stdin.on("error", (error) => {
+      settle(() => reject(new Error(`PDF 精修组件提前退出：${error?.code || "stdin error"}`)));
+    });
+    child.on("error", () => settle(() => reject(new Error("PDF 精修组件未安装，请安装 requirements-pdf.txt 中的依赖。"))));
     child.on("close", (code) => {
       if (code !== 0) {
-        reject(new Error(`PDF 精修失败：${stderr.trim() || "PyMuPDF 进程异常退出"}`));
+        settle(() => reject(new Error(`PDF 精修失败：${stderr.trim() || "PyMuPDF 进程异常退出"}`)));
         return;
       }
       try {
-        resolve(JSON.parse(stdout));
+        settle(() => resolve(JSON.parse(stdout)));
       } catch {
-        reject(new Error("PDF 精修组件返回了无效结果。"));
+        settle(() => reject(new Error("PDF 精修组件返回了无效结果。")));
       }
     });
     child.stdin.end(JSON.stringify(payload));
