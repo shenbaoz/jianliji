@@ -52,7 +52,8 @@ export async function createEditedPdfVersions({ originalResumeFileUrl, text, cha
     clean_path: join(uploadDir, cleanOutputName),
     review_path: join(uploadDir, reviewOutputName),
     font_path: await findChineseFontPath(),
-    changes: pendingChanges
+    changes: pendingChanges,
+    optimized_text: text
   });
   if (result.pageCountVerified !== true) {
     throw new Error("PDF 精修失败：成品页数未通过校验。");
@@ -63,7 +64,9 @@ export async function createEditedPdfVersions({ originalResumeFileUrl, text, cha
     changedLineCount: result.changedLineCount,
     appliedChanges: Array.isArray(result.appliedChanges) ? result.appliedChanges : [],
     unchangedPages: Array.isArray(result.unchangedPages) ? result.unchangedPages : [],
-    pageCountVerified: true
+    pageCountVerified: true,
+    deliveryMode: result.deliveryMode === "generated-template" ? "generated-template" : "source-template",
+    portraitApplied: result.portraitApplied === true
   };
 }
 

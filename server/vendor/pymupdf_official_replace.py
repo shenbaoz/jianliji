@@ -491,6 +491,91 @@ def create_versions(payload):
     }
 
 
+def generated_lines(value, width=46):
+    result = []
+    for source_line in str(value or "").splitlines():
+        line = source_line.strip()
+        if not line:
+            continue
+        prefix = ""
+        if line.startswith(("-", "•", "·")):
+            prefix, line = "• ", line[1:].strip()
+        while len(line) > width:
+            cut = width
+            for index in range(width, max(12, width - 10), -1):
+                if line[index - 1] in "，。；：、,.;: /|":
+                    cut = index
+                    break
+            result.append((prefix + line[:cut].strip(), False))
+            prefix = "  "
+            line = line[cut:].strip()
+        result.append((prefix + line, False))
+    return result
+
+
+def create_generated_resume_pdf(payload):
+    """Render a readable, recruiter-first fallback when source-template edits are unsafe."""
+    text = str(payload.get("optimized_text") or "").strip()
+    if not text:
+        raise RuntimeError("generated resume requires optimized text")
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    font_name = "ResumeCN"
+    font_path = payload.get("font_path")
+    if not font_path or not os.path.exists(font_path):
+        raise RuntimeError("generated resume requires a configured Chinese font")
+    page.insert_font(fontname=font_name, fontfile=font_path)
+    margin = 46
+    y = 50
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    has_header_name = bool(lines and len(normalize(lines[0])) <= 20)
+    name = lines[0] if has_header_name else "求职者"
+    page.insert_text((margin, y), name, fontname=font_name, fontsize=21, color=(0.08, 0.20, 0.18))
+    y += 34
+    page.draw_line((margin, y), (549, y), color=(0.08, 0.28, 0.24), width=1.5)
+    y += 22
+
+    body_lines = lines[1:] if has_header_name else lines
+    for original_line in body_lines:
+        heading = normalize(original_line) in {"核心优势", "教育背景", "实习经历", "工作经历", "项目经历", "校园经历", "技能", "技能特长", "专业技能", "荣誉", "证书"}
+        wrapped = generated_lines(original_line, 46)
+        needed = (22 if heading else 0) + len(wrapped) * 21 + 5
+        if y + needed > 790:
+            page = document.new_page(width=595, height=842)
+            page.insert_font(fontname=font_name, fontfile=font_path)
+            y = 50
+        if heading:
+            page.draw_rect((margin, y, 549, y + 18), color=None, fill=(0.91, 0.95, 0.93), overlay=True)
+            page.insert_text((margin + 6, y + 13), original_line, fontname=font_name, fontsize=11, color=(0.08, 0.28, 0.24))
+            y += 26
+            continue
+        for line, _ in wrapped:
+            spare = page.insert_textbox((margin, y, 549, y + 20), line, fontname=font_name, fontsize=10.5, color=(0.08, 0.10, 0.10), lineheight=1.1)
+            if spare < 0:
+                raise RuntimeError("generated resume line did not fit")
+            y += 21
+        y += 4
+
+    document.save(payload["clean_path"], garbage=4, deflate=True)
+    document.save(payload["review_path"], garbage=4, deflate=True)
+    document.close()
+    verified = pymupdf.open(payload["clean_path"])
+    extracted = "".join(page.get_text() for page in verified)
+    verified.close()
+    required = [normalize(line) for line in body_lines if len(normalize(line)) >= 4]
+    if "□" in extracted or "�" in extracted or any(item not in normalize(extracted) for item in required):
+        raise RuntimeError("generated resume text verification failed")
+    return {"portraitApplied": False, "textVerified": True}
+
+
 if __name__ == "__main__":
     request = json.load(sys.stdin)
-    json.dump(create_versions(request), sys.stdout, ensure_ascii=False)
+    result = create_versions(request)
+    if result["changedLineCount"] == 0:
+        generated = create_generated_resume_pdf(request)
+        result["deliveryMode"] = "generated-template"
+        result.update(generated)
+    else:
+        result["deliveryMode"] = "source-template"
+        result["portraitApplied"] = False
+    json.dump(result, sys.stdout, ensure_ascii=False)

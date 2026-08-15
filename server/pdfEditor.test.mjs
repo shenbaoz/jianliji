@@ -78,14 +78,13 @@ test("createEditedPdfVersions restores a page when reflow intersects a fixed ima
     assert.deepEqual(result.unchangedPages, [0], "an unsafe page must be restored and identified by its zero-based index");
     assert.equal(result.pageCountVerified, true);
     assert.equal(result.changedLineCount, 0);
+    assert.equal(result.deliveryMode, "generated-template");
     assert.deepEqual(result.appliedChanges, []);
 
     const cleanPath = join(uploadDir, result.cleanOutputName);
     const cleanBytes = await readFile(cleanPath);
     const parsed = await parseResumeFile({ buffer: cleanBytes, originalname: "clean.pdf", mimetype: "application/pdf" });
-    assert.match(parsed.text, /Managed event operations/, "rollback must restore the page's source text");
-    assert.doesNotMatch(parsed.text, /regional campaigns/, "unsafe replacement text must not survive rollback");
-    assert.deepEqual(await imageGeometry(cleanPath), await imageGeometry(sourcePath));
+    assert.match(parsed.text.replace(/\s+/g, ""), /Ledeventoperationsacrosscommunitiesandregionalcampaigns/, "fallback must contain the verified optimized text");
   } finally {
     await rm(uploadDir, { recursive: true, force: true });
   }
@@ -137,10 +136,11 @@ test("createEditedPdfVersions skips a drastic short rewrite that would leave a m
     });
 
     assert.equal(result.changedLineCount, 0);
+    assert.equal(result.deliveryMode, "generated-template");
     assert.deepEqual(result.appliedChanges, []);
     const cleanBytes = await readFile(join(uploadDir, result.cleanOutputName));
     const parsed = await parseResumeFile({ buffer: cleanBytes, originalname: "clean.pdf", mimetype: "application/pdf" });
-    assert.match(parsed.text.replace(/\s+/g, ""), /Managedcampaignstrategy/);
+    assert.match(parsed.text.replace(/\s+/g, ""), /Ledcampaigns/);
   } finally {
     await rm(uploadDir, { recursive: true, force: true });
   }
@@ -185,11 +185,37 @@ test("createEditedPdfVersions keeps the original text when a replacement cannot 
       uploadDir
     });
 
-    assert.equal(result.changedLineCount, 0, "an unsafe replacement must be skipped instead of squeezed into the original line");
+    assert.equal(result.changedLineCount, 0, "an unsafe source-template replacement must not be squeezed into the original line");
+    assert.equal(result.deliveryMode, "generated-template");
     const cleanBytes = await readFile(join(uploadDir, result.cleanOutputName));
     const parsed = await parseResumeFile({ buffer: cleanBytes, originalname: "clean.pdf", mimetype: "application/pdf" });
-    assert.match(parsed.text, /Managed event operations/, "skipping an unsafe replacement must preserve the original text");
-    assert.doesNotMatch(parsed.text, /regional growth programs/, "oversized replacement text must not be drawn over neighboring content");
+    assert.match(parsed.text.replace(/\s+/g, ""), /regionalgrowthprograms/, "generated fallback must retain the optimized content");
+  } finally {
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
+test("createEditedPdfVersions generates a readable optimized PDF when no source sentence is safely replaceable", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-pdf-generated-fallback-"));
+  const sourceName = `generated-fallback-${Date.now()}.pdf`;
+  await writeFile(join(uploadDir, sourceName), await createPdfBuffer(["Original event experience"]));
+
+  try {
+    const result = await createEditedPdfVersions({
+      originalResumeFileUrl: `/api/resume-files/${sourceName}`,
+      text: "测试用户\n核心优势\n- 独立策划并落地活动执行，沉淀现场协同清单。",
+      changes: [{ before: "PDF 中不存在的原句", after: "独立策划并落地活动执行，沉淀现场协同清单。" }],
+      uploadDir
+    });
+
+    assert.equal(result.deliveryMode, "generated-template");
+    const parsed = await parseResumeFile({
+      buffer: await readFile(join(uploadDir, result.cleanOutputName)),
+      originalname: "generated.pdf",
+      mimetype: "application/pdf"
+    });
+    assert.match(parsed.text.replace(/[\s\x00，。]/g, ""), /独立策划并落地活动执行沉淀现场协同清单/);
+    assert.doesNotMatch(parsed.text, /□|�/);
   } finally {
     await rm(uploadDir, { recursive: true, force: true });
   }

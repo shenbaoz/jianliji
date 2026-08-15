@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import { ResumeDocument } from "./ResumeDocument";
 import { applyTextToDocxPreview } from "../services/docxFileEditor";
 import { createEditedPdfPreview } from "../services/pdfFileEditor";
+import type { PdfDeliveryMode } from "../services/pdfFileEditor";
 import { getVisibleResumeTemplates } from "../services/templates";
 import { buildResumeChangeSet } from "../services/changeExamples";
 import type { SavedResumeVersion } from "../types";
@@ -45,6 +46,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
   const [editableOriginalHtml, setEditableOriginalHtml] = useState("");
   const [editedPdfUrl, setEditedPdfUrl] = useState("");
   const [reviewPdfUrl, setReviewPdfUrl] = useState("");
+  const [pdfDeliveryMode, setPdfDeliveryMode] = useState<PdfDeliveryMode | "">("");
   const [fileSyncMessage, setFileSyncMessage] = useState("");
   const [previewMode, setPreviewMode] = useState<"original" | "refined">("refined");
   const template = getVisibleResumeTemplates().find((item) => item.id === currentVersion?.templateId) || getVisibleResumeTemplates()[0];
@@ -55,7 +57,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
   // A generated URL alone is not proof that the original PDF accepted a
   // safe text replacement. Never label an unchanged source PDF as refined.
   const canPublish = canSyncOriginalPdf
-    ? Boolean(editedPdfUrl) && /已实际写回\s*\d+\s*处/.test(fileSyncMessage)
+    ? Boolean(editedPdfUrl && pdfDeliveryMode)
     : true;
 
   useEffect(() => {
@@ -101,7 +103,8 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
         if (!cancelled) {
           setEditedPdfUrl(nextUrls.fileUrl);
           setReviewPdfUrl(nextUrls.reviewFileUrl);
-          setFileSyncMessage(nextUrls.changedLineCount > 0 ? `已实际写回 ${nextUrls.changedLineCount} 处，右侧用红线标出。` : "未定位到可安全替换的原句，已保留原文件。");
+          setPdfDeliveryMode(nextUrls.deliveryMode);
+          setFileSyncMessage("优化后的简历已生成，可下载。");
         }
       } catch (error) {
         if (!cancelled) {
