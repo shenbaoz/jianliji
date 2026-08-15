@@ -1520,8 +1520,13 @@ button.admin-module-card {
   }
 
   .editor-preview-viewport {
-    overflow: hidden;
+    overflow: visible;
     min-height: 0;
+  }
+
+  .editor-preview-viewport .resume-print-area {
+    width: 100% !important;
+    max-width: 100%;
   }
 
   .editor-header-actions button {

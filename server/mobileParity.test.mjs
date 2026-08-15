@@ -19,11 +19,13 @@ test("refinement button does not pass a click event as resume input", async () =
 });
 
 test("the A4 editor preview stays readable inside its mobile viewport", async () => {
-  const editor = await read("src/components/EditorView.tsx");
+  const [editor, css] = await Promise.all([read("src/components/EditorView.tsx"), read("src/styles.css")]);
 
   assert.match(editor, /editor-preview-viewport/);
   assert.match(editor, /w-\[210mm\]/);
   assert.doesNotMatch(editor, /new ResizeObserver\(updatePreviewScale\)/);
+  assert.match(css, /\.editor-preview-viewport\s*\{\s*overflow:\s*visible;/);
+  assert.match(css, /\.editor-preview-viewport\s+\.resume-print-area\s*\{\s*width:\s*100%\s*!important;/);
 });
 
 test("shared pages expose the responsive presentation contract", async () => {
