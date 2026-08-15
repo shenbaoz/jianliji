@@ -92,3 +92,15 @@ test("existing-resume repair requires flagged low-relevance evidence to move aft
   assert.match(repair, /移动到所有 priorityEvidence 之后/);
   assert.match(repair, /最多保留一条短描述/);
 });
+
+test("existing-resume prompts require restrained HR-first highlights", () => {
+  const resumeInput = { ...input, sourceMode: "resume" };
+  const strategy = buildStrategyMessages(resumeInput).map((item) => item.content).join("\n");
+  const rewrite = buildRewriteMessages(resumeInput, {}).map((item) => item.content).join("\n");
+
+  assert.match(strategy, /开头摘要/);
+  assert.match(strategy, /核心经历首条/);
+  assert.match(rewrite, /一至两段经历/);
+  assert.match(rewrite, /没有原始指标时不得补造数字/);
+  assert.match(rewrite, /禁止为制造差异而全篇重写/);
+});
