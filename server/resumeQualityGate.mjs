@@ -108,7 +108,8 @@ function assessPositiveQuality(text) {
   const strippedLines = experienceLines.map((line) => line.replace(/^[-•·▪◆◇]\s*/, "").trim());
   const strongVerbCoverage = strippedLines.length
     ? strippedLines.filter((line) => isStrongVerbStart(line)).length / strippedLines.length
-    : 1;  const quantifiedRatio = strippedLines.length
+    : 1;
+  const quantifiedRatio = strippedLines.length
     ? strippedLines.filter((line) => QUANT_PATTERN.test(line)).length / strippedLines.length
     : 0;
   const templatePhrases = TEMPLATE_PHRASES.filter((phrase) => text.includes(phrase));

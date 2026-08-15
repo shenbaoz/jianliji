@@ -61,10 +61,15 @@ export function evaluateRoleFitImpact({ sourceText, draftText, strategy = {} }) 
   const frontPriorityPositions = matchedInDraft
     .filter((location) => location.position < 0.5)
     .map((location) => location.position);
-  const lastFrontPriorityPosition = Math.max(...frontPriorityPositions);
+  const lastFrontPriorityPosition = frontPriorityPositions.length
+    ? Math.max(...frontPriorityPositions)
+    : 0;
   for (const fragment of deprioritized) {
     const location = locateEvidence(fragment, draft);
-    if (location && (!frontPriorityPositions.length || location.position < lastFrontPriorityPosition) && location.matchedLength >= 10) {
+    // 只有存在已前置的核心证据时，才按"是否排在核心证据之前"判断弱相关经历；
+    // 核心证据完全未前置时，由"岗位证据未前置/前半部分证据不足"两条检查负责，
+    // 避免把位于全文末尾的弱相关经历也误报为"排在核心证据之前"。
+    if (location && frontPriorityPositions.length > 0 && location.position < lastFrontPriorityPosition && location.matchedLength >= 10) {
       checks.push(`与岗位关联较弱的经历仍排在核心证据之前，应压缩或后置：${truncate(fragment)}`);
     }
   }
@@ -105,7 +110,7 @@ function findUnverifiedTopHighlight(sourceText, draftText) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const headerIndex = lines.findIndex((line) => normalizeForMatch(line).includes("核心优势"));
+  const headerIndex = lines.findIndex((line) => normalizeForMatch(line).startsWith("核心优势"));
   if (headerIndex === -1) return null;
 
   const candidates = lines.slice(headerIndex + 1, headerIndex + 4)

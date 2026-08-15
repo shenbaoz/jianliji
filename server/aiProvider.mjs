@@ -175,18 +175,23 @@ export function createFallbackAiClient(primary, fallback) {
   if (!primary) return fallback;
   if (!fallback) return primary;
 
-  return {
-    async optimize(input) {
+  const withFallback = (method) => async (input) => {
+    try {
+      return await primary[method](input);
+    } catch (primaryError) {
       try {
-        return await primary.optimize(input);
-      } catch (primaryError) {
-        try {
-          return await fallback.optimize(input);
-        } catch (fallbackError) {
-          throw new Error(`AI 优化暂不可用：主服务失败（${primaryError.message}）；备用服务失败（${fallbackError.message}）。`);
-        }
+        return await fallback[method](input);
+      } catch (fallbackError) {
+        throw new Error(`AI 优化暂不可用：主服务失败（${primaryError.message}）；备用服务失败（${fallbackError.message}）。`);
       }
     }
+  };
+
+  return {
+    optimize: withFallback("optimize"),
+    ...(typeof primary.optimizeUniversal === "function" || typeof fallback.optimizeUniversal === "function"
+      ? { optimizeUniversal: withFallback("optimizeUniversal") }
+      : {})
   };
 }
 
@@ -197,17 +202,24 @@ async function parseJsonContent(content, fallback) {
   } catch { return fallback; }
 }
 
-function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fetch, model, timeoutMs = 60_000 }) {
+function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fetch, model, timeoutMs = 60_000, pipelineDeadlineMs = 200_000 }) {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // 整条优化管线的总时长上限：客户端等待 240s（见 src/services/aiOptimize.ts 与 Nginx 对齐），
+  // 服务端必须在其之前返回，避免客户端已超时、服务端仍继续调用模型烧 token。
 
-  async function completeWithRetry(messages, json = false, maxTokens = 1800, reasoningEffort) {
+  async function completeWithRetry(messages, json = false, maxTokens = 1800, reasoningEffort, deadlineAt = 0) {
     let lastError;
     for (let attempt = 0; attempt < 3; attempt++) {
+      const remainingMs = deadlineAt ? Math.max(0, deadlineAt - Date.now()) : timeoutMs;
+      if (remainingMs < 3_000) {
+        throw lastError || new Error(`${provider} 优化总时长超限，请稍后重试。`);
+      }
+      const attemptTimeout = deadlineAt ? Math.min(timeoutMs, remainingMs) : timeoutMs;
       try {
         const response = await fetchImpl(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          signal: AbortSignal.timeout(timeoutMs),
+          signal: AbortSignal.timeout(attemptTimeout),
           body: JSON.stringify({
             model,
             // DeepSeek V4 使用 reasoning_effort 控制思考强度（none/high/max），
@@ -238,7 +250,8 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
         const retryable = error?.retryable === true
           || error?.name === "TimeoutError"
           || error?.name === "AbortError";
-        if (attempt < 2 && retryable) {
+        const canRetry = attempt < 2 && retryable && (!deadlineAt || Date.now() < deadlineAt - 5_000);
+        if (canRetry) {
           await sleep(Math.min(2000 * Math.pow(2, attempt), 8000));
           continue;
         }
@@ -254,7 +267,8 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
     const redacted = redactAiPayload({ resumeText: sourceText });
     const { buildUniversalRefineMessages } = await import("./resumeOptimizationPrompts.mjs");
     const { evaluateUniversalRefinement } = await import("./resumeQualityGate.mjs");
-    const raw = await completeWithRetry(buildUniversalRefineMessages({ resumeText: redacted.payload.resumeText }), true, 3200);
+    const deadlineAt = Date.now() + pipelineDeadlineMs;
+    const raw = await completeWithRetry(buildUniversalRefineMessages({ resumeText: redacted.payload.resumeText }), true, 3200, undefined, deadlineAt);
     const parsed = await parseJsonContent(raw, { text: "", changes: [] });
     const candidateName = extractCandidateName(sourceText);
     const restoreInline = (value) => restoreContacts(
@@ -298,6 +312,9 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
       const input = { ...redacted.payload, sourceMode, skippedFollowUp };
       const { buildStrategyMessages, buildRewriteMessages, buildQaMessages, buildRepairMessages } = await import("./resumeOptimizationPrompts.mjs");
       const { evaluateResumeQuality } = await import("./resumeQualityGate.mjs");
+      // 全管线共享一个总 deadline：任一调用按剩余时间收缩超时与重试，
+      // 确保服务端在客户端等待窗口（240s）内返回，不出现客户端已放弃、服务端仍在调模型。
+      const deadlineAt = Date.now() + pipelineDeadlineMs;
       // JSON Patch 快捷路径仅保留给显式请求的"快速润色"模式；
       // 深度岗位优化默认走"策略优先"管线，禁止因局部 patch 成功就提前返回。
       if (sourceMode === "resume" && fastPolish === true) {
@@ -318,21 +335,22 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
           findUnverifiedClaims,
           provider,
           model,
-          targetRole
+          targetRole,
+          deadlineAt
         });
         if (patchResult) return patchResult;
         // patch 路径失败或未通过质量门禁 → 自动降级到标准管线
       }
-      const strategyRaw = await completeWithRetry(buildStrategyMessages(input), true, 900);
+      const strategyRaw = await completeWithRetry(buildStrategyMessages(input), true, 900, undefined, deadlineAt);
       const strategy = await parseJsonContent(strategyRaw, { mode: sourceMode === "creator" ? "creator" : "novice", targetRole, keywords: [], priorityEvidence: [], deprioritizedEvidence: [], gaps: [], highlights: [], evidence: [], structure: [] });
-      let draft = await completeWithRetry(buildRewriteMessages(input, strategy), false, 2200);
-      const qaRaw = await completeWithRetry(buildQaMessages(input, strategy, draft), true, 3200);
+      let draft = await completeWithRetry(buildRewriteMessages(input, strategy), false, 2200, undefined, deadlineAt);
+      const qaRaw = await completeWithRetry(buildQaMessages(input, strategy, draft), true, 3200, undefined, deadlineAt);
       const qa = await parseJsonContent(qaRaw, { verdict: "ready", score: 85, issues: [], suggestions: [] });
       if (typeof qa.finalText === "string" && qa.finalText.trim()) draft = qa.finalText.trim();
       draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
       let quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa, strategy });
       if (!quality.passed) {
-        draft = await completeWithRetry(buildRepairMessages(input, strategy, draft, quality.checks), false, 2200);
+        draft = await completeWithRetry(buildRepairMessages(input, strategy, draft, quality.checks), false, 2200, undefined, deadlineAt);
         draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
         quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa: { verdict: "ready", score: qa.score || 80 }, strategy });
       }
@@ -367,10 +385,11 @@ async function tryApplyReactiveResumePatch({
   findUnverifiedClaims,
   provider,
   model,
-  targetRole
+  targetRole,
+  deadlineAt = 0
 }) {
   try {
-    const patchContent = await completeWithRetry(buildReactiveResumeImproveMessages({ ...input, skippedFollowUp: input.skippedFollowUp }), true, 3200);
+    const patchContent = await completeWithRetry(buildReactiveResumeImproveMessages({ ...input, skippedFollowUp: input.skippedFollowUp }), true, 3200, undefined, deadlineAt);
     const proposals = parseReactiveResumePatchResponse(patchContent);
     const sourceLines = input.resumeText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
     const patched = applyReactiveResumeProposals({ lines: sourceLines }, proposals);

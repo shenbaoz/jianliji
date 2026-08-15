@@ -370,3 +370,49 @@ test("弱相关经历排在两项前置核心证据之后时，不要求它再�
   assert.equal(result.passed, true);
   assert.equal(result.checks.some((item) => /关联较弱/.test(item)), false);
 });
+
+test("核心证据完全未前置时，弱相关经历不叠加误报排在核心证据之前", () => {
+  const filler = "这是一段很长的岗位无关描述，用于撑起前半部分篇幅，让核心证据全部落到后半部分区域。".repeat(4);
+  const contentExperience = "公众号运营：每周产出 3-4 篇原创内容";
+  const publicAccountExperience = "小红书运营：输出 150+ 篇内容";
+  const weakExperience = "校园推广活动执行，地推覆盖 400+ 人";
+  const source = [contentExperience, publicAccountExperience, weakExperience].join("\n");
+  const draft = [
+    "教育背景",
+    filler,
+    contentExperience,
+    publicAccountExperience,
+    "其他实践",
+    weakExperience
+  ].join("\n");
+
+  const result = evaluateRoleFitImpact({
+    sourceText: source,
+    draftText: draft,
+    strategy: {
+      targetRole: "新媒体运营实习生",
+      priorityEvidence: [contentExperience, publicAccountExperience],
+      deprioritizedEvidence: [weakExperience],
+      highlights: []
+    }
+  });
+
+  assert.equal(result.passed, false);
+  // 失败原因应是"核心证据未前置"，而不是弱相关经历误报
+  assert.ok(result.checks.some((item) => /未前置/.test(item)));
+  assert.equal(result.checks.some((item) => /关联较弱/.test(item)), false);
+});
+
+test("正文里提及「核心优势」的句子不会被误当成亮点栏目标题", () => {
+  const draftText = [
+    "我在实习中负责提升内容的传播效果，核心优势体现在选题与数据分析上",
+    "核心优势",
+    "- 小红书运营：输出 150+ 篇内容",
+    "- 公众号运营：每周产出 3-4 篇深度原创"
+  ].join("\n");
+
+  const result = evaluateRoleFitImpact({ sourceText, draftText, strategy });
+
+  // 标题应定位到真正的"核心优势"栏目行，正文提及不应触发未核实误报
+  assert.equal(result.checks.some((item) => /顶部亮点|未核实/.test(item)), false);
+});

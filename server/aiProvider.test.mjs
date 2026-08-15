@@ -325,3 +325,48 @@ test("uses Kimi when the primary AI provider returns a temporary failure", async
   assert.equal(calls[0].url, "https://api.moonshot.cn/v1/chat/completions");
   assert.equal(calls[0].options.headers.Authorization, "Bearer kimi-key");
 });
+
+test("fallback client also routes universal refinement to the backup provider", async () => {
+  const calls = [];
+  const primary = createDeepSeekClient({
+    apiKey: "deepseek-key",
+    fetchImpl: async () => new Response(JSON.stringify({ error: { message: "service busy" } }), { status: 503 })
+  });
+  const fallback = createKimiClient({
+    apiKey: "kimi-key",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+        text: "实习经历\n- 负责公众号推文撰写与发布，建立选题库并按周更新内容。",
+        changes: [{ before: "负责推文撰写和发布", after: "负责公众号推文撰写与发布，建立选题库并按周更新内容。" }]
+      }) } }] }), { status: 200 });
+    }
+  });
+
+  const client = createFallbackAiClient(primary, fallback);
+  const result = await client.optimizeUniversal({ resumeText: "实习经历\n负责推文撰写和发布" });
+
+  assert.equal(result.quality.verdict, "ready");
+  assert.equal(calls[0].url, "https://api.moonshot.cn/v1/chat/completions");
+});
+
+test("pipeline deadline aborts retries so the client never waits past its window", async () => {
+  // 单次超时 10s、管线总 deadline 500ms：第一次尝试在 500ms 后超时，
+  // 剩余时间不足 5s，不得再进入第二次重试，整个请求应在 1s 内失败。
+  const startedAt = Date.now();
+  const client = createDeepSeekClient({
+    apiKey: "test-key",
+    timeoutMs: 10_000,
+    pipelineDeadlineMs: 500,
+    fetchImpl: async () => new Promise(() => {}) // 永不返回，靠 AbortSignal 超时终止
+  });
+
+  await assert.rejects(
+    () => client.optimize({ resumeText: "教育背景\n新闻学本科", targetRole: "内容运营", jobDescription: "负责内容" }),
+    (error) => {
+      assert.ok(Date.now() - startedAt < 1_500, "管线应在 deadline 后立即失败，而不是等到重试耗尽");
+      assert.match(String(error.message), /超时|超限|请求失败|service/i);
+      return true;
+    }
+  );
+});

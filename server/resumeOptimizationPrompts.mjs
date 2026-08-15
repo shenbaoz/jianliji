@@ -155,7 +155,8 @@ export function buildRepairMessages(input, strategy, draft, issues) {
 - 以下优先证据必须出现在成稿前半部分：${priorityEvidence.join("；") || "见岗位策略"}
 - 以下低相关证据必须移动到所有 priorityEvidence 之后，且每项最多保留一条短描述：${deprioritizedEvidence.join("；") || "无"}
 - 若失败项指出低相关经历占据前半部分，必须通过后置或压缩修复，不得只改写措辞后仍留在原位置。`
-    : `若失败项指出缺少"核心优势"，必须在求职目标之后、教育背景之前插入该栏目，并只从已提供事实中提炼。修复后删除所有编造内容。`;  return [{ role: "system", content: `你是简历终审编辑。${safety}
+    : `若失败项指出缺少"核心优势"，必须在求职目标之后、教育背景之前插入该栏目，并只从已提供事实中提炼。修复后删除所有编造内容。`;
+  return [{ role: "system", content: `你是简历终审编辑。${safety}
 必须逐项修复全部失败项，不得遗漏任何一条：
 ${issues.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 
