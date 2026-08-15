@@ -19,6 +19,20 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true };
   }
 
+  componentDidCatch(error: Error) {
+    // 发布后旧页面可能还在内存中，而按需加载的旧脚本已经被新版本替换。
+    // 自动刷新一次即可拿到同一版本的页面文件，避免用户落到错误页。
+    const message = String(error?.message || "");
+    const isStaleAsset = /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk/i.test(message);
+    const recoveryKey = "resume-stale-asset-recovered";
+    if (isStaleAsset && sessionStorage.getItem(recoveryKey) !== "1") {
+      sessionStorage.setItem(recoveryKey, "1");
+      window.location.reload();
+      return;
+    }
+    sessionStorage.removeItem(recoveryKey);
+  }
+
   render() {
     if (this.state.hasError) {
       return (
