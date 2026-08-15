@@ -85,3 +85,50 @@ test("quality gate rejects an existing resume that only swaps a few near-synonym
   assert.equal(result.passed, false);
   assert.ok(result.checks.some((item) => /改写幅度不足/.test(item)));
 });
+
+test("quality gate fails a safe but nearly unchanged draft when priority evidence is not front-loaded", () => {
+  const source = "教育背景\n新闻学本科\n经历\n校园推广活动执行\n公众号运营：每周产出 3-4 篇深度原创\n小红书运营：输出 150+ 篇内容";
+  const strategy = {
+    targetRole: "新媒体运营实习生",
+    keywords: ["内容运营"],
+    priorityEvidence: ["公众号运营：每周产出 3-4 篇深度原创", "小红书运营：输出 150+ 篇内容"],
+    deprioritizedEvidence: ["校园推广活动执行"],
+    gaps: [],
+    highlights: []
+  };
+  const result = evaluateResumeQuality({
+    sourceText: source,
+    targetRole: "新媒体运营实习生",
+    draft: source,
+    sourceMode: "resume",
+    strategy,
+    qa: { verdict: "ready", score: 95 }
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.checks.some((item) => /前置|前半部分/.test(item)));
+});
+
+test("quality gate passes a draft that front-loads the target role's priority evidence", () => {
+  const source = "教育背景\n新闻学本科\n经历\n校园推广活动执行\n公众号运营：每周产出 3-4 篇深度原创\n小红书运营：输出 150+ 篇内容";
+  const strategy = {
+    targetRole: "新媒体运营实习生",
+    keywords: ["内容运营"],
+    priorityEvidence: ["公众号运营：每周产出 3-4 篇深度原创", "小红书运营：输出 150+ 篇内容"],
+    deprioritizedEvidence: ["校园推广活动执行"],
+    gaps: [],
+    highlights: ["前置小红书与公众号的内容运营证据"]
+  };
+  const draft = "核心优势\n- 小红书内容运营：日更原创，累计输出求职攻略 150+ 篇内容。\n- 公众号运营：每周产出 3-4 篇深度原创内容。\n教育背景\n新闻学本科\n经历\n- 校园推广活动执行";
+  const result = evaluateResumeQuality({
+    sourceText: source,
+    targetRole: "新媒体运营实习生",
+    draft,
+    sourceMode: "resume",
+    strategy,
+    qa: { verdict: "ready", score: 90 }
+  });
+
+  assert.equal(result.passed, true);
+  assert.deepEqual(result.highlights, ["前置小红书与公众号的内容运营证据"]);
+});

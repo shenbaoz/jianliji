@@ -125,6 +125,7 @@ export type SavedResumeVersion = {
   jobDescription: string;
   optimizedText: string;
   changes?: Array<{ before: string; after: string }>;
+  highlights?: string[];
   originalResumeHtml?: string;
   originalResumeFileName?: string;
   originalResumeMimeType?: string;

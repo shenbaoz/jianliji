@@ -291,14 +291,16 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
 
   return {
     optimizeUniversal,
-    async optimize({ resumeText, targetRole, jobDescription, evidenceAnswers = [], sourceMode = "resume", skippedFollowUp = false }) {
+    async optimize({ resumeText, targetRole, jobDescription, evidenceAnswers = [], sourceMode = "resume", skippedFollowUp = false, fastPolish = false }) {
       if (sourceMode === "universal") return optimizeUniversal({ resumeText });
       if (!apiKey) throw new Error(`未配置 ${provider === "kimi" ? "KIMI_API_KEY" : "DEEPSEEK_API_KEY"}，已保留本地规则分析，不会发送简历内容。`);
       const redacted = redactAiPayload({ resumeText, targetRole, jobDescription, evidenceAnswers });
       const input = { ...redacted.payload, sourceMode, skippedFollowUp };
       const { buildStrategyMessages, buildRewriteMessages, buildQaMessages, buildRepairMessages } = await import("./resumeOptimizationPrompts.mjs");
       const { evaluateResumeQuality } = await import("./resumeQualityGate.mjs");
-      if (sourceMode === "resume") {
+      // JSON Patch 快捷路径仅保留给显式请求的"快速润色"模式；
+      // 深度岗位优化默认走"策略优先"管线，禁止因局部 patch 成功就提前返回。
+      if (sourceMode === "resume" && fastPolish === true) {
         const patchResult = await tryApplyReactiveResumePatch({
           input,
           resumeText,
@@ -322,23 +324,24 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
         // patch 路径失败或未通过质量门禁 → 自动降级到标准管线
       }
       const strategyRaw = await completeWithRetry(buildStrategyMessages(input), true, 900);
-      const strategy = await parseJsonContent(strategyRaw, { mode: sourceMode === "creator" ? "creator" : "novice", targetRole, keywords: [], evidence: [], gaps: [], structure: [] });
+      const strategy = await parseJsonContent(strategyRaw, { mode: sourceMode === "creator" ? "creator" : "novice", targetRole, keywords: [], priorityEvidence: [], deprioritizedEvidence: [], gaps: [], highlights: [], evidence: [], structure: [] });
       let draft = await completeWithRetry(buildRewriteMessages(input, strategy), false, 2200);
       const qaRaw = await completeWithRetry(buildQaMessages(input, strategy, draft), true, 3200);
       const qa = await parseJsonContent(qaRaw, { verdict: "ready", score: 85, issues: [], suggestions: [] });
       if (typeof qa.finalText === "string" && qa.finalText.trim()) draft = qa.finalText.trim();
       draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
-      let quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa });
+      let quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa, strategy });
       if (!quality.passed) {
         draft = await completeWithRetry(buildRepairMessages(input, strategy, draft, quality.checks), false, 2200);
         draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
-        quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa: { verdict: "ready", score: qa.score || 80 } });
+        quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa: { verdict: "ready", score: qa.score || 80 }, strategy });
       }
       const text = restoreSourceContact(
         restoreCandidateName(restoreContacts(draft, redacted.replacements), extractCandidateName(resumeText)),
         resumeText
       );
-      return { provider, model, text, suggestions: Array.isArray(qa.suggestions) ? qa.suggestions.slice(0, 3) : [], reviewFlags: quality.reviewFlags, safe: quality.reviewFlags.length === 0, quality: { verdict: quality.passed ? "ready" : "needs_evidence", score: quality.score, checks: quality.checks, positive: quality.positive } };
+      const highlights = Array.isArray(quality.highlights) ? quality.highlights.slice(0, 3) : [];
+      return { provider, model, text, suggestions: Array.isArray(qa.suggestions) ? qa.suggestions.slice(0, 3) : [], reviewFlags: quality.reviewFlags, safe: quality.reviewFlags.length === 0, highlights, quality: { verdict: quality.passed ? "ready" : "needs_evidence", score: quality.score, checks: quality.checks, positive: quality.positive, highlights } };
     }
   };
 }

@@ -368,6 +368,34 @@ test("AI optimize endpoint removes unresolved contact placeholders from the fina
   }
 });
 
+test("AI optimize endpoint returns optimization highlights from the provider", async () => {
+  const { versionStore, interestStore } = createStores();
+  const app = createApp(versionStore, interestStore, null, null, {
+    optimize: async () => ({
+      provider: "deepseek",
+      model: "deepseek-chat",
+      text: "核心优势\n- 小红书内容运营：输出 150+ 篇内容。",
+      highlights: ["前置小红书内容运营证据", "压缩校园推广描述"]
+    })
+  });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/ai/optimize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Visitor-Id": "ai-highlights-a1b2c3d4" },
+      body: JSON.stringify({ resumeText: "校园内容项目经历", targetRole: "新媒体运营实习生", jobDescription: "" })
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.highlights, ["前置小红书内容运营证据", "压缩校园推广描述"]);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+});
+
 test("AI optimize endpoint enforces a dedicated anonymous cost boundary", async () => {
   const { versionStore, interestStore } = createStores();
   let calls = 0;

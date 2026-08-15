@@ -194,6 +194,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
             {exportMessage || fileSyncMessage || (canPublish ? "成品简历已生成，可导出无红线 PDF。" : "正在生成成品简历...")}
           </p>
         </div>
+        <OptimizationHighlightsCard highlights={currentVersion?.highlights} />
         <ChangeCompareCard changes={resumeChanges} />
         <div className="border border-slate-200 bg-[#e9ece8] p-4 sm:p-8">
             <div className="mb-4 flex items-center justify-between">
@@ -311,6 +312,25 @@ function stripNonResumeNotes(text: string) {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function OptimizationHighlightsCard({ highlights }: { highlights?: string[] }) {
+  const visible = highlights?.filter(Boolean).slice(0, 3) || [];
+  if (!visible.length) return null;
+
+  return (
+    <div className="mb-5 rounded-lg border border-[#d2e0d9] bg-[#f3f8f5] p-4 sm:p-5">
+      <h2 className="text-sm font-semibold text-[#1a3c34]">本次优化重点</h2>
+      <ul className="mt-3 space-y-2">
+        {visible.map((item, index) => (
+          <li key={index} className="flex items-start gap-2 text-xs leading-5 text-[#1a3c34]">
+            <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#1a3c34]" aria-hidden="true" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function ChangeCompareCard({ changes }: { changes: Array<{ before: string; after: string }> }) {

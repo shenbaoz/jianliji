@@ -1,4 +1,5 @@
 import { findUnverifiedClaims } from "./aiProvider.mjs";
+import { evaluateRoleFitImpact } from "./resumeTailoringQuality.mjs";
 
 const STRONG_VERBS = ["负责", "完成", "主导", "搭建", "优化", "分析", "设计", "开发", "落地", "推进", "统筹", "策划", "输出", "搭建并", "独立完成", "独立负责", "独立策划", "编写", "建立", "制定", "管理", "维护", "协调", "组织", "参与", "协助", "执行", "撰写", "处理", "跟进", "打通", "沉淀", "上线", "迭代", "重构", "监控", "复盘", "交付", "从0搭建", "从零搭建", "持续优化", "围绕", "针对", "基于", "结合", "通过", "开展", "承担", "把控", "整理", "收集", "调研", "访谈", "测试", "构建", "部署", "运营", "推广", "拉新", "留存", "转化"];
 const WEAK_OPENERS = ["负责日常", "负责相关", "参与日常", "协助日常", "负责一些", "参与一些", "做一些", "负责部分", "参与活动", "协助完成日常"];
@@ -50,29 +51,35 @@ function isSubstantiveUniversalChange(before, after) {
   return lengthDelta >= 0.2 || sourceSimilarity(source, result) < 0.72;
 }
 
-export function evaluateResumeQuality({ sourceText, evidenceAnswers = [], targetRole, draft, sourceMode = "standard", qa = {} }) {
+export function evaluateResumeQuality({ sourceText, evidenceAnswers = [], targetRole, draft, sourceMode = "standard", qa = {}, strategy }) {
   const text = String(draft || "").trim();
   const checks = [];
   const preservesExistingLayout = sourceMode === "resume";
+  // 岗位效果检查：验证最相关证据是否前置、弱相关经历是否被压缩/后置
+  const roleFit = preservesExistingLayout && strategy
+    ? evaluateRoleFitImpact({ sourceText, draftText: text, strategy })
+    : null;
+  const alreadyWellTailored = Boolean(roleFit?.passed && roleFit.alreadyWellTailored);
   if (!preservesExistingLayout && text.length < 180) checks.push("正文过短，未达到基础投递完整度");
   if (!/(教育|学历|学校|项目|实践|经历|技能)/.test(text)) checks.push("缺少教育、经历或技能结构");
   if (preservesExistingLayout) {
-    const lostSections = findLostSections(sourceText, text);
+    const lostSections = findLostSectionGroups(sourceText, text);
     if (lostSections.length) checks.push(`AI 删除了原简历的章节：${lostSections.join("、")}`);
   }
   if (!preservesExistingLayout && !/核心优势/.test(text)) checks.push("缺少置于简历顶部的核心优势栏目");
   if (!preservesExistingLayout && targetRole && !text.includes(targetRole) && !text.includes(targetRole.replace(/实习生|专员|工程师/g, ""))) checks.push("目标岗位不清晰");
   if (/(改写说明|投递前补强建议|\[待确认\]|\[待补充\]|TODO|作为AI|以下是)/i.test(text)) checks.push("正文混入说明或待确认内容");
   if (/自我评价|个人评价/.test(text)) checks.push("使用了空泛自我评价，应改为有证据的核心优势");
-  if (sourceText && preservesExistingLayout && normalizedResumeText(sourceText) === normalizedResumeText(text)) {
+  if (sourceText && preservesExistingLayout && !alreadyWellTailored && normalizedResumeText(sourceText) === normalizedResumeText(text)) {
     checks.push("AI 未产生实际文字改写");
-  } else if (sourceText && preservesExistingLayout && sourceSimilarity(sourceText, text) > 0.94) {
+  } else if (sourceText && preservesExistingLayout && !alreadyWellTailored && sourceSimilarity(sourceText, text) > 0.94) {
     checks.push("改写幅度不足，成稿与原简历过于相似");
   } else if (sourceText && !preservesExistingLayout && sourceSimilarity(sourceText, text) > 0.88) {
     checks.push("改写幅度不足，成稿与原简历过于相似");
   }
   const reviewFlags = findUnverifiedClaims(sourceText, text, evidenceAnswers);
   checks.push(...reviewFlags);
+  if (roleFit) checks.push(...roleFit.checks);
   if (qa.verdict === "repair") checks.push(...(Array.isArray(qa.issues) ? qa.issues : ["招聘者质检未通过"]));
   const unique = [...new Set(checks)].slice(0, 12);
   // 模型自评分不可靠（可能极端低或虚高）：低于 65 视为不可信，用 65 保底
@@ -87,7 +94,8 @@ export function evaluateResumeQuality({ sourceText, evidenceAnswers = [], target
     score,
     checks: unique,
     reviewFlags,
-    positive
+    positive,
+    highlights: roleFit?.highlights || []
   };
 }
 
@@ -147,7 +155,19 @@ function isStrongVerbStart(line) {
   return VERB_HEAD_REGEX.test(line.slice(0, 6));
 }
 
-function findLostSections(sourceText, draft) {
+/**
+ * 章节保留检查放宽为分组校验：教育/经历/技能/证书荣誉四类锚点中，
+ * 只要原文有、成稿整组缺失才算删除章节。允许重排、合并、重命名
+ * （如"专业技能"→"技能"、删除允许的空泛"自我评价"），但真实内容骨架必须保留。
+ */
+const SECTION_HEADING_GROUPS = [
+  ["教育背景", "教育经历"],
+  ["工作经历", "实习经历", "项目经历", "项目经验", "实践经历", "主要经历", "相关经历", "校园经历", "工作内容"],
+  ["技能", "技能清单", "专业技能", "技能与优势"],
+  ["证书", "荣誉", "获奖经历"]
+];
+
+function findLostSectionGroups(sourceText, draft) {
   const sourceHeadings = new Set(
     String(sourceText || "")
       .split(/\r?\n/)
@@ -157,7 +177,9 @@ function findLostSections(sourceText, draft) {
   );
   if (!sourceHeadings.size) return [];
   const draftText = String(draft || "");
-  return [...sourceHeadings].filter((heading) => !draftText.includes(heading));
+  return SECTION_HEADING_GROUPS
+    .filter((group) => group.some((heading) => sourceHeadings.has(heading)) && !group.some((heading) => draftText.includes(heading)))
+    .map((group) => group[0]);
 }
 
 function normalizedResumeText(value) {

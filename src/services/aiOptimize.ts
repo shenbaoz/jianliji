@@ -1,7 +1,7 @@
 import { getApiBase } from "./apiBase";
 import type { ResumeInput, UniversalRefinement } from "../types";
 
-type AiOptimizeResponse = { provider: "deepseek" | "kimi"; model: string; text: string; changes?: Array<{ before: string; after: string }>; suggestions?: string[]; quality?: { verdict: "ready" | "needs_evidence"; score: number; checks: string[] }; reviewFlags?: string[]; safe?: boolean };
+type AiOptimizeResponse = { provider: "deepseek" | "kimi"; model: string; text: string; changes?: Array<{ before: string; after: string }>; suggestions?: string[]; highlights?: string[]; quality?: { verdict: "ready" | "needs_evidence"; score: number; checks: string[]; highlights?: string[] }; reviewFlags?: string[]; safe?: boolean };
 
 export async function optimizeWithDeepSeek(input: ResumeInput, evidenceAnswers: string[] = []): Promise<AiOptimizeResponse> {
   const skippedFollowUp = evidenceAnswers.length === 0;

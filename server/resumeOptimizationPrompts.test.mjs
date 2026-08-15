@@ -38,3 +38,39 @@ test("existing-resume prompts require visible substantive rewrites instead of sp
   assert.match(qa, /肉眼可见的实质改写/);
   assert.match(qa, /suggestions.*必须为空数组/);
 });
+
+test("existing-resume strategy outputs content prioritization instead of preserving every section verbatim", () => {
+  const resumeInput = { ...input, sourceMode: "resume" };
+  const strategy = buildStrategyMessages(resumeInput).map((item) => item.content).join("\n");
+
+  assert.match(strategy, /priorityEvidence/);
+  assert.match(strategy, /deprioritizedEvidence/);
+  assert.match(strategy, /highlights/);
+  assert.match(strategy, /可核实/);
+  assert.doesNotMatch(strategy, /保留全部原始经历、章节顺序/);
+  assert.doesNotMatch(strategy, /禁止删除、合并、重排/);
+});
+
+test("existing-resume rewrite allows reordering, front-loading and compression while keeping facts", () => {
+  const resumeInput = { ...input, sourceMode: "resume" };
+  const rewrite = buildRewriteMessages(resumeInput, {}).map((item) => item.content).join("\n");
+
+  assert.match(rewrite, /重排/);
+  assert.match(rewrite, /前置/);
+  assert.match(rewrite, /压缩/);
+  assert.match(rewrite, /核心优势/);
+  assert.match(rewrite, /必须原样保留/);
+  assert.match(rewrite, /编造/);
+  assert.doesNotMatch(rewrite, /不得删除、合并、重排/);
+  assert.doesNotMatch(rewrite, /每条原文对应输出一条优化文本/);
+});
+
+test("existing-resume QA checks role-fit front-loading instead of fixed slot positions", () => {
+  const resumeInput = { ...input, sourceMode: "resume" };
+  const qa = buildQaMessages(resumeInput, {}, "正文").map((item) => item.content).join("\n");
+
+  assert.match(qa, /priorityEvidence/);
+  assert.match(qa, /前半部分/);
+  assert.match(qa, /低相关经历/);
+  assert.doesNotMatch(qa, /全部原始章节、经历、日期、公司、职位和条目数量都在原位置/);
+});

@@ -53,7 +53,7 @@ test("keeps the source unchanged and marks an ungrounded universal draft unsafe"
   assert.ok(result.quality.checks.some((item) => /Python|300/.test(item)));
 });
 
-test("directly applies Reactive Resume JSON patches to an uploaded resume", async () => {
+test("directly applies Reactive Resume JSON patches only when fastPolish is requested", async () => {
   const requests = [];
   const client = createDeepSeekClient({
     apiKey: "test-key",
@@ -76,7 +76,8 @@ test("directly applies Reactive Resume JSON patches to an uploaded resume", asyn
     resumeText: "教育背景\n新闻学本科\n负责校园活动执行",
     targetRole: "内容运营",
     jobDescription: "负责活动策划",
-    sourceMode: "resume"
+    sourceMode: "resume",
+    fastPolish: true
   });
 
   assert.equal(requests.length, 1);
@@ -87,6 +88,53 @@ test("directly applies Reactive Resume JSON patches to an uploaded resume", asyn
     after: "统筹校园活动执行，完成方案撰写、现场协同与复盘。"
   }]);
   assert.deepEqual(result.suggestions, []);
+});
+
+test("existing resumes default to the strategy-first pipeline instead of the JSON Patch fast path", async () => {
+  let call = 0;
+  const requests = [];
+  const client = createDeepSeekClient({
+    apiKey: "test-key",
+    fetchImpl: async (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      call += 1;
+      const content = call === 1
+        ? JSON.stringify({
+          mode: "standard",
+          targetRole: "新媒体运营实习生",
+          keywords: ["内容运营", "社群运营"],
+          priorityEvidence: ["小红书日更输出求职攻略 150+ 篇内容", "公众号每周产出 3-4 篇深度原创"],
+          deprioritizedEvidence: ["校园推广活动执行"],
+          gaps: ["短视频拍摄"],
+          highlights: ["前置小红书与公众号的内容运营证据"]
+        })
+        : call === 3
+          ? JSON.stringify({
+            verdict: "ready",
+            score: 88,
+            issues: [],
+            suggestions: [],
+            finalText: "核心优势\n- 小红书内容运营：日更原创，累计输出求职攻略 150+ 篇内容。\n- 公众号运营：每周产出 3-4 篇深度原创内容。\n教育背景\n新闻学本科\n经历\n- 校园推广活动执行"
+          })
+          : "核心优势\n- 小红书内容运营：日更原创，累计输出求职攻略 150+ 篇内容。\n- 公众号运营：每周产出 3-4 篇深度原创内容。\n教育背景\n新闻学本科\n经历\n- 校园推广活动执行";
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+    }
+  });
+
+  const result = await client.optimize({
+    resumeText: "教育背景\n新闻学本科\n经历\n校园推广活动执行\n公众号运营：每周产出 3-4 篇深度原创\n小红书运营：输出 150+ 篇内容",
+    targetRole: "新媒体运营实习生",
+    jobDescription: "",
+    sourceMode: "resume"
+  });
+
+  assert.ok(requests.length >= 3, "应先产生岗位策略，再产生草稿与 QA，而不是一次 patch 就返回");
+  const strategyPrompt = requests[0].messages[0].content;
+  assert.match(strategyPrompt, /priorityEvidence/);
+  assert.match(strategyPrompt, /deprioritizedEvidence/);
+  assert.doesNotMatch(strategyPrompt, /只改写经历正文，不动结构/);
+  assert.doesNotMatch(strategyPrompt, /JSON Patch/);
+  assert.deepEqual(result.highlights, ["前置小红书与公众号的内容运营证据"]);
 });
 
 test("redacts contact details before sending a resume to an AI provider", () => {
@@ -136,14 +184,16 @@ test("uses the DeepSeek chat-completions API and restores contacts in its respon
   assert.equal(requests[0].options.headers.Authorization, "Bearer test-key");
   assert.match(requests[0].options.body, /\{\{PHONE_1\}\}/);
   assert.match(requests[0].options.body, /12 名用户访谈/);
-  const patchPrompt = JSON.parse(requests[0].options.body).messages[0].content;
-  const strategyPrompt = JSON.parse(requests[1].options.body).messages[0].content;
-  const rewritePrompt = JSON.parse(requests[2].options.body).messages[0].content;
-  assert.match(patchPrompt, /只改写经历正文，不动结构/);
-  assert.match(patchPrompt, /JSON Patch/);
-  assert.match(strategyPrompt, /已有简历必须保留全部原始经历/);
+  const strategyPrompt = JSON.parse(requests[0].options.body).messages[0].content;
+  const rewritePrompt = JSON.parse(requests[1].options.body).messages[0].content;
+  const qaPrompt = JSON.parse(requests[2].options.body).messages[0].content;
+  assert.match(strategyPrompt, /priorityEvidence/);
+  assert.match(strategyPrompt, /deprioritizedEvidence/);
+  assert.match(strategyPrompt, /highlights/);
+  assert.doesNotMatch(strategyPrompt, /保留全部原始经历|不得删除、合并、重排/);
   assert.match(rewritePrompt, /整句重写/);
-  assert.match(rewritePrompt, /不得删除、合并、重排/);
+  assert.doesNotMatch(rewritePrompt, /不得删除、合并、重排/);
+  assert.match(qaPrompt, /priorityEvidence/);
   assert.doesNotMatch(`${strategyPrompt}\n${rewritePrompt}`, /最多保留 4 段|强力重组/);
   assert.equal(output.text, "联系人：13812345678");
   assert.equal(output.provider, "deepseek");

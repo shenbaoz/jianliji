@@ -13,7 +13,7 @@ const initialInput: ResumeInput = { candidateName: "", targetRole: "", resumeTex
 export default function App() {
   const [view, setView] = useState<AppView>("home");
   const [input, setInput] = useState<ResumeInput>(initialInput);
-  const [result, setResult] = useState<{ text: string; changes: Array<{ before: string; after: string }> } | null>(null);
+  const [result, setResult] = useState<{ text: string; changes: Array<{ before: string; after: string }>; highlights?: string[] } | null>(null);
   const [message, setMessage] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const inFlight = useRef(false);
@@ -42,7 +42,7 @@ export default function App() {
         throw new Error(refined.quality.checks?.[0] || "成稿缺少可核实的具体事实，请补充一两件带数字或结果的具体经历后再生成。");
       }
       setInput(normalized);
-      setResult({ text: refined.text, changes: refined.changes || [] });
+      setResult({ text: refined.text, changes: refined.changes || [], highlights: refined.highlights || [] });
       go("editor");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "暂时无法完成整理，请稍后再试。");
@@ -54,7 +54,7 @@ export default function App() {
   const version: SavedResumeVersion | undefined = result ? {
     id: "current-refinement", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     name: input.candidateName || "简历", title: "通用简历", candidateName: input.candidateName || "简历", targetRole: "通用简历", score: 0, templateId: "classic",
-    resumeText: input.resumeText, jobDescription: "", optimizedText: result.text, experience: result.text, changes: result.changes,
+    resumeText: input.resumeText, jobDescription: "", optimizedText: result.text, experience: result.text, changes: result.changes, highlights: result.highlights,
     originalResumeHtml: input.originalResumeHtml, originalResumeFileName: input.originalResumeFileName, originalResumeMimeType: input.originalResumeMimeType,
     originalResumeFileUrl: input.originalResumeFileUrl, originalResumeDataUrl: input.originalResumeDataUrl
   } : undefined;
