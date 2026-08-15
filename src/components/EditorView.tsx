@@ -184,7 +184,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">成品简历</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">保留原有模板与页数，只整理已有经历的表达。</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">{pdfDeliveryMode === "generated-template" ? "已按专业求职结构重新排版，重点突出真实经历与成果。" : "保留原有模板与页数，只整理已有经历的表达。"}</p>
             </div>
             <div className="editor-header-actions flex flex-wrap gap-2">
               <button type="button" onClick={handleDownloadPdf} disabled={!canPublish} className="inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33] disabled:cursor-not-allowed disabled:bg-slate-300">
@@ -234,73 +234,10 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
 };
 
 function PdfFilePreview({ src, isUpdating }: { src: string; isUpdating: boolean }) {
-  const [renderedPages, setRenderedPages] = useState<Array<{ dataUrl: string; width: number; height: number }>>([]);
-  const [previewError, setPreviewError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    let loadingTask: { destroy: () => Promise<void>; promise: Promise<any> } | null = null;
-    let renderTask: { cancel: () => void; promise: Promise<void> } | null = null;
-    setRenderedPages([]);
-    setPreviewError("");
-    void (async () => {
-      try {
-        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-        const workerUrl = new URL("pdfjs-dist/legacy/build/pdf.worker.mjs", import.meta.url);
-        workerUrl.searchParams.set("mime", "application-javascript-v1");
-        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl.toString();
-        loadingTask = pdfjs.getDocument({ url: src, verbosity: 0 });
-        const pdf = await loadingTask.promise;
-        const nextPages: Array<{ dataUrl: string; width: number; height: number }> = [];
-        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-          if (cancelled) break;
-          const page = await pdf.getPage(pageNumber);
-          const viewport = page.getViewport({ scale: 1.6 });
-          const canvas = document.createElement("canvas");
-          const context = canvas.getContext("2d", { alpha: false });
-          if (!context) throw new Error("Canvas is unavailable");
-          canvas.width = Math.ceil(viewport.width);
-          canvas.height = Math.ceil(viewport.height);
-          const nextRenderTask = page.render({ canvas, canvasContext: context, viewport });
-          renderTask = nextRenderTask;
-          await nextRenderTask.promise;
-          nextPages.push({ dataUrl: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height });
-        }
-        await loadingTask.destroy();
-        loadingTask = null;
-        if (cancelled) return;
-        setRenderedPages(nextPages);
-        setPreviewError("");
-      } catch (error) {
-        if (!cancelled) {
-          console.error("PDF preview rendering failed", error);
-          setPreviewError("PDF 预览加载失败，请重新上传。");
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      renderTask?.cancel();
-      void loadingTask?.destroy();
-    };
-  }, [src]);
-
   return (
-    <div className="pdf-canvas-preview relative grid gap-4 bg-[#e9ece8]" aria-busy={isUpdating}>
-      {renderedPages.map((page, index) => (
-        <img
-          key={`${src}-${index}`}
-          src={page.dataUrl}
-          width={page.width}
-          height={page.height}
-          className="block h-auto w-[210mm] max-w-full bg-white shadow-[0_16px_48px_rgba(15,23,42,0.12)]"
-          alt={`简历第 ${index + 1} 页`}
-        />
-      ))}
-      {!renderedPages.length && !previewError && <div className="grid h-[297mm] place-items-center bg-white text-sm text-slate-500">正在打开原简历…</div>}
-      {previewError && <div className="grid h-[297mm] place-items-center bg-white text-sm text-rose-700">{previewError}</div>}
-      {isUpdating && renderedPages.length > 0 && <div className="sticky bottom-4 mx-auto rounded-full bg-slate-950/90 px-4 py-2 text-xs font-medium text-white shadow-lg">正在同步优化文字…</div>}
+    <div className="pdf-canvas-preview relative bg-[#e9ece8]" aria-busy={isUpdating}>
+      <iframe className="h-[297mm] w-full border-0 bg-white" src={src} title="简历 PDF 预览" />
+      {isUpdating && <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-slate-950/90 px-4 py-2 text-xs font-medium text-white shadow-lg">正在同步优化文字…</div>}
     </div>
   );
 }

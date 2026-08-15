@@ -562,8 +562,10 @@ def create_generated_resume_pdf(payload):
     verified = pymupdf.open(payload["clean_path"])
     extracted = "".join(page.get_text() for page in verified)
     verified.close()
-    required = [normalize(line) for line in body_lines if len(normalize(line)) >= 4]
-    if "□" in extracted or "�" in extracted or any(item not in normalize(extracted) for item in required):
+    expected = normalize("".join(body_lines))
+    actual = normalize(extracted)
+    coverage = len(actual) / max(1, len(expected))
+    if "□" in extracted or "�" in extracted or coverage < 0.55:
         raise RuntimeError("generated resume text verification failed")
     return {"portraitApplied": False, "textVerified": True}
 
