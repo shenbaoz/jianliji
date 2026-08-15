@@ -17,6 +17,10 @@ export function evaluateRoleFitImpact({ sourceText, draftText, strategy = {} }) 
   const draft = String(draftText || "");
   const checks = [];
   const highlights = buildGroundedHighlights(strategy, source, draft);
+  const unverifiedTopHighlight = findUnverifiedTopHighlight(source, draft);
+  if (unverifiedTopHighlight) {
+    checks.push(`顶部亮点包含无法在原简历核实的结果：${truncate(unverifiedTopHighlight)}`);
+  }
 
   const declaredPriority = (strategy.priorityEvidence || [])
     .filter((item) => typeof item === "string" && item.trim());
@@ -88,6 +92,30 @@ function buildGroundedHighlights(strategy, source, draft) {
     return countSharedBigrams(normalized, trustedBigrams) >= 2;
   });
   return grounded.slice(0, 3);
+}
+
+function findUnverifiedTopHighlight(sourceText, draftText) {
+  const source = normalizeForMatch(sourceText);
+  const sourceBigrams = bigrams(source);
+  const lines = String(draftText || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const headerIndex = lines.findIndex((line) => normalizeForMatch(line).includes("核心优势"));
+  if (headerIndex === -1) return null;
+
+  const candidates = lines.slice(headerIndex + 1, headerIndex + 4)
+    .filter((line) => !/^(教育背景|教育经历|工作经历|实习经历|项目经历|技能|证书|校园经历|联系方式)/.test(line));
+  for (const line of candidates) {
+    const normalized = normalizeForMatch(line);
+    if (!normalized) continue;
+    const numbers = normalized.match(/\d+(?:\.\d+)?%?/g) || [];
+    if (numbers.some((number) => !source.includes(number))) return line;
+
+    const outcomeClaim = /(增长|提升|降低|实现|主导|千万|显著)/.test(line);
+    if (outcomeClaim && countSharedBigrams(normalized, sourceBigrams) < 3) return line;
+  }
+  return null;
 }
 
 function truncate(value, limit = 28) {

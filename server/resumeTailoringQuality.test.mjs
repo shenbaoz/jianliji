@@ -223,3 +223,17 @@ test("策略遗漏优先证据时，按目标岗位从原文回退提取可核�
   assert.equal(result.passed, true);
   assert.equal(result.checks.length, 0);
 });
+
+test("顶部亮点不能使用原简历之外的成果", () => {
+  const draftText = [
+    "核心优势",
+    "- 主导账号增长 300%，实现千万级曝光",
+    "- 小红书运营：输出 150+ 篇内容",
+    "- 公众号运营：每周产出 3-4 篇深度原创"
+  ].join("\n");
+
+  const result = evaluateRoleFitImpact({ sourceText, draftText, strategy });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.checks.some((item) => /顶部亮点|未核实/.test(item)));
+});
