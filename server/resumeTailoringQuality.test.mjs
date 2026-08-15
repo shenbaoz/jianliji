@@ -97,7 +97,7 @@ test("策略没有可前置证据时返回失败而不是高分", () => {
   const result = evaluateRoleFitImpact({
     sourceText,
     draftText: sourceText,
-    strategy: { ...strategy, priorityEvidence: [] }
+    strategy: { ...strategy, targetRole: "数据分析实习生", priorityEvidence: [] }
   });
 
   assert.equal(result.passed, false);
@@ -152,4 +152,74 @@ test("已强匹配的简历（证据本就在前半部分）标记为 alreadyWel
 
   assert.equal(result.passed, true);
   assert.equal(result.alreadyWellTailored, true);
+});
+
+test("顶部摘要已覆盖关键事实时，不应因后文存在更长原句而误判未前置", () => {
+  const fullColdStart = "参与健康产品 0-1 冷启动，单轮批量搭建约 100 条计划，围绕素材卖点、出价策略、表单提交目标和落地页版本开展 A/B 测试";
+  const fullReport = "独立输出投放日报，复盘消耗、转化数、CPA、CTR、CVR、素材表现、计划状态、后端反馈和次日优化动作";
+  const source = ["教育背景", "实习经历", fullColdStart, fullReport].join("\n");
+  const draft = [
+    "核心优势",
+    "- 参与健康产品 0-1 冷启动，单轮搭建约 100 条计划并开展 A/B 测试",
+    "- 独立输出投放日报，复盘 CPA、CTR、CVR 与后端反馈",
+    "教育背景",
+    "实习经历",
+    fullColdStart,
+    fullReport
+  ].join("\n");
+
+  const result = evaluateRoleFitImpact({
+    sourceText: source,
+    draftText: draft,
+    strategy: {
+      priorityEvidence: [fullColdStart, fullReport],
+      deprioritizedEvidence: [],
+      highlights: []
+    }
+  });
+
+  assert.equal(result.passed, true);
+  assert.equal(result.checks.length, 0);
+});
+
+test("前半部分已有两项核心证据时，不应要求每一项策略证据都前置", () => {
+  const account = "独立并行管理 3 个巨量引擎账户，月消耗约 60 万元，实际获客成本约 95 元";
+  const coldStart = "参与健康产品 0-1 冷启动，单轮批量搭建约 100 条计划并开展 A/B 测试";
+  const report = "独立输出投放日报，复盘 CPA、CTR、CVR、素材表现和后端反馈";
+  const source = ["教育背景", "实习经历", account, coldStart, report].join("\n");
+  const draft = ["核心优势", account, coldStart, "教育背景", "实习经历", report].join("\n");
+
+  const result = evaluateRoleFitImpact({
+    sourceText: source,
+    draftText: draft,
+    strategy: { priorityEvidence: [account, coldStart, report], deprioritizedEvidence: [], highlights: [] }
+  });
+
+  assert.equal(result.passed, true);
+  assert.equal(result.checks.length, 0);
+});
+
+test("策略遗漏优先证据时，按目标岗位从原文回退提取可核实证据", () => {
+  const source = [
+    "教育背景",
+    "校园推广活动执行，地推覆盖 400+ 人",
+    "小红书 | 内容运营：输出求职攻略 150+ 篇，沉淀精准用户 300+ 人",
+    "留学公众号 | 运营负责人：每周产出 3-4 篇原创内容，累计 50+ 篇"
+  ].join("\n");
+  const draft = [
+    "核心优势",
+    "- 小红书 | 内容运营：输出求职攻略 150+ 篇，沉淀精准用户 300+ 人",
+    "- 留学公众号 | 运营负责人：每周产出 3-4 篇原创内容，累计 50+ 篇",
+    "教育背景",
+    "校园推广活动执行，地推覆盖 400+ 人"
+  ].join("\n");
+
+  const result = evaluateRoleFitImpact({
+    sourceText: source,
+    draftText: draft,
+    strategy: { targetRole: "新媒体运营实习生", priorityEvidence: [], deprioritizedEvidence: [], highlights: [] }
+  });
+
+  assert.equal(result.passed, true);
+  assert.equal(result.checks.length, 0);
 });

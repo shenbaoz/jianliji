@@ -18,8 +18,11 @@ export function evaluateRoleFitImpact({ sourceText, draftText, strategy = {} }) 
   const checks = [];
   const highlights = buildGroundedHighlights(strategy, source, draft);
 
-  const priority = (strategy.priorityEvidence || [])
+  const declaredPriority = (strategy.priorityEvidence || [])
     .filter((item) => typeof item === "string" && item.trim());
+  const priority = declaredPriority.length
+    ? declaredPriority
+    : inferPriorityEvidence(source, strategy.targetRole);
   const deprioritized = (strategy.deprioritizedEvidence || [])
     .filter((item) => typeof item === "string" && item.trim());
 
@@ -39,18 +42,6 @@ export function evaluateRoleFitImpact({ sourceText, draftText, strategy = {} }) 
 
   const frontPlaced = matchedInDraft.some((location) => location.position < 0.5);
   if (!frontPlaced) checks.push("岗位最相关证据未前置到成稿前半部分");
-
-  priority.forEach((fragment, index) => {
-    const sourceLocation = sourceLocations[index];
-    const draftLocation = draftLocations[index];
-    if (
-      sourceLocation && draftLocation
-      && sourceLocation.position >= 0.5
-      && draftLocation.position >= 0.5
-    ) {
-      checks.push(`原文后半部分的岗位证据未前置：${truncate(fragment)}`);
-    }
-  });
 
   const firstHalfEvidenceCount = matchedInDraft
     .filter((location) => location.position < 0.5)
@@ -104,23 +95,45 @@ function truncate(value, limit = 28) {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 }
 
+function inferPriorityEvidence(sourceText, targetRole) {
+  const role = String(targetRole || "");
+  const roleTerms = ["新媒体", "内容", "运营", "社群", "短视频", "投放", "广告", "信息流", "数据", "产品", "开发", "设计", "销售"]
+    .filter((term) => role.includes(term));
+  if (!roleTerms.length) return [];
+
+  return String(sourceText || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 12)
+    .map((line) => ({
+      line,
+      score: roleTerms.reduce((total, term) => total + (line.includes(term) ? 3 : 0), 0)
+        + (/\d+(?:\.\d+)?\s*(?:%|％|人|个|次|项|篇|万|条|户|家|月|周)?/.test(line) ? 1 : 0)
+    }))
+    .filter((item) => item.score >= 3)
+    .sort((left, right) => right.score - left.score || right.line.length - left.line.length)
+    .slice(0, 3)
+    .map((item) => item.line);
+}
+
 /**
- * 在文本中定位某个事实片段：先按行归一化后做包含匹配，再退化为二元组相似度匹配。
- * 返回 { position, lineIndex, matchedLength }；position 为 0~1 的归一化行位置。
+ * 在文本中定位某个事实片段：优先选取成稿中最早出现、且语义覆盖足够的候选句。
+ * 顶部摘要往往会压缩原始长句；不能因为正文后部存在一条更接近原文的完整句，
+ * 就忽略已前置的等价摘要。position 按归一化字符偏移计算，避免长短行影响前半部分判断。
  */
 function locateEvidence(fragment, text) {
   const lines = String(text || "")
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const total = Math.max(1, lines.length);
   const target = normalizeForMatch(fragment);
   if (!target) return null;
 
   const targetBigrams = bigrams(target);
   const targetNumbers = new Set(target.match(/\d+(?:\.\d+)?%?/g) || []);
 
-  let best = null;
+  const candidates = [];
+  let charOffset = 0;
   for (let index = 0; index < lines.length; index += 1) {
     const normalized = normalizeForMatch(lines[index]);
     if (!normalized) continue;
@@ -131,16 +144,24 @@ function locateEvidence(fragment, text) {
       const overlap = countSharedBigrams(normalized, targetBigrams) / Math.max(1, targetBigrams.length);
       const hasTargetNumber = [...targetNumbers].some((number) => normalized.includes(number));
       score = overlap * 0.7 + (hasTargetNumber ? 0.3 : 0);
+      // 简历摘要通常保留职责主语与核心动作、删去枚举项；连续保留 10 个字符视为足够的事实锚点。
+      const leadLength = Math.min(10, target.length);
+      if (leadLength >= 6 && normalized.includes(target.slice(0, leadLength))) score = Math.max(score, 0.5);
     }
-    if (score >= 0.35 && (!best || score > best.score)) {
-      best = { index, score, length: normalized.length };
-    }
+    if (score >= 0.35) candidates.push({ index, score, length: normalized.length, charOffset });
+    charOffset += normalized.length;
   }
-  if (!best) return null;
+  if (!candidates.length) return null;
+  const bestScore = Math.max(...candidates.map((candidate) => candidate.score));
+  // 允许摘要保留约一半的事实语义后被视为等价证据；数字型事实仍必须命中至少一个原始数字。
+  const earliestEquivalent = candidates
+    .filter((candidate) => candidate.score >= Math.max(0.35, bestScore * 0.45))
+    .sort((left, right) => left.index - right.index)[0];
+  const totalChars = Math.max(1, lines.reduce((sum, line) => sum + normalizeForMatch(line).length, 0));
   return {
-    position: (best.index + 1) / total,
-    lineIndex: best.index,
-    matchedLength: best.length
+    position: earliestEquivalent.charOffset / totalChars,
+    lineIndex: earliestEquivalent.index,
+    matchedLength: earliestEquivalent.length
   };
 }
 

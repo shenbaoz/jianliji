@@ -74,3 +74,21 @@ test("existing-resume QA checks role-fit front-loading instead of fixed slot pos
   assert.match(qa, /低相关经历/);
   assert.doesNotMatch(qa, /全部原始章节、经历、日期、公司、职位和条目数量都在原位置/);
 });
+
+test("existing-resume repair requires flagged low-relevance evidence to move after priority evidence", () => {
+  const resumeInput = { ...input, sourceMode: "resume" };
+  const strategy = {
+    priorityEvidence: ["小红书运营：输出 150+ 篇内容", "公众号运营：每周产出 3-4 篇"],
+    deprioritizedEvidence: ["校园地推活动"]
+  };
+  const repair = buildRepairMessages(
+    resumeInput,
+    strategy,
+    "校园地推活动\n小红书运营：输出 150+ 篇内容",
+    ["与岗位关联较弱的经历仍占据成稿前半部分，应压缩或后置：校园地推活动"]
+  ).map((item) => item.content).join("\n");
+
+  assert.match(repair, /不得只改写措辞/);
+  assert.match(repair, /移动到所有 priorityEvidence 之后/);
+  assert.match(repair, /最多保留一条短描述/);
+});
