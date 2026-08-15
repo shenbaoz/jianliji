@@ -237,3 +237,136 @@ test("顶部亮点不能使用原简历之外的成果", () => {
   assert.equal(result.passed, false);
   assert.ok(result.checks.some((item) => /顶部亮点|未核实/.test(item)));
 });
+
+test("弱相关经历已后置时，相同日期不能让质检误判它仍在前半部分", () => {
+  const weakExperience = "2024.09-至今 融合媒体学院外联部：主动联系校外品牌方并跟进活动对接";
+  const contentExperience = "小红书内容运营：日更原创内容 150+ 篇，沉淀精准用户 300+ 人";
+  const publicAccountExperience = "公众号运营：每周产出 3-4 篇原创内容，累计完成 50+ 篇";
+  const source = [
+    "教育背景",
+    "2024.09-2028.07 四川传媒学院新闻学本科",
+    weakExperience,
+    contentExperience,
+    publicAccountExperience
+  ].join("\n");
+  const draft = [
+    "核心优势",
+    contentExperience,
+    publicAccountExperience,
+    "教育背景",
+    "2024.09-2028.07 四川传媒学院新闻学本科",
+    "项目经历",
+    "内容选题与排版支持",
+    "社群日常维护",
+    "活动物料整理",
+    "技能：秀米、剪映",
+    "其他实践",
+    weakExperience
+  ].join("\n");
+
+  const result = evaluateRoleFitImpact({
+    sourceText: source,
+    draftText: draft,
+    strategy: {
+      priorityEvidence: [contentExperience, publicAccountExperience],
+      deprioritizedEvidence: [weakExperience],
+      highlights: []
+    }
+  });
+
+  assert.equal(result.passed, true);
+  assert.equal(result.checks.some((item) => /关联较弱/.test(item)), false);
+});
+
+test("弱相关经历不能因与核心经历共用起始月份而被误判前置", () => {
+  const weakExperience = "2024.12-2025.02 红娘校园优享学车推广计划：完成市场调研与营销方案制定";
+  const contentExperience = "2024.12-至今 小红书内容运营：日更原创内容 150+ 篇，沉淀精准用户 300+ 人";
+  const publicAccountExperience = "留学公众号运营：每周产出 3-4 篇原创内容，累计完成 50+ 篇";
+  const source = [weakExperience, contentExperience, publicAccountExperience].join("\n");
+  const draft = [
+    "核心优势",
+    contentExperience,
+    publicAccountExperience,
+    "教育背景",
+    "新闻学本科",
+    "项目经历",
+    "内容选题与排版支持",
+    "社群日常维护",
+    "活动物料整理",
+    "技能：秀米、剪映",
+    "其他实践",
+    weakExperience
+  ].join("\n");
+
+  const result = evaluateRoleFitImpact({
+    sourceText: source,
+    draftText: draft,
+    strategy: {
+      priorityEvidence: [contentExperience, publicAccountExperience],
+      deprioritizedEvidence: [weakExperience],
+      highlights: []
+    }
+  });
+
+  assert.equal(result.passed, true);
+  assert.equal(result.checks.some((item) => /关联较弱/.test(item)), false);
+});
+
+test("弱相关经历排在全部核心证据之后时，不因仍处于全文前半段而失败", () => {
+  const weakExperience = "校园推广活动执行：完成市场调研与线下活动物料协调";
+  const contentExperience = "小红书内容运营：日更原创内容 150+ 篇，沉淀精准用户 300+ 人";
+  const publicAccountExperience = "公众号运营：每周产出 3-4 篇原创内容，累计完成 50+ 篇";
+  const source = [weakExperience, contentExperience, publicAccountExperience].join("\n");
+  const draft = [
+    "核心优势",
+    contentExperience,
+    publicAccountExperience,
+    weakExperience,
+    "技能与其他信息",
+    "熟悉内容平台日常发布、排版与基础剪辑，能够配合活动执行、素材整理、社群维护、数据记录、选题协作和复盘文档沉淀。".repeat(5)
+  ].join("\n");
+
+  const result = evaluateRoleFitImpact({
+    sourceText: source,
+    draftText: draft,
+    strategy: {
+      priorityEvidence: [contentExperience, publicAccountExperience],
+      deprioritizedEvidence: [weakExperience],
+      highlights: []
+    }
+  });
+
+  assert.equal(result.passed, true);
+  assert.equal(result.checks.some((item) => /关联较弱/.test(item)), false);
+});
+
+test("弱相关经历排在两项前置核心证据之后时，不要求它再等待后文第三项证据", () => {
+  const contentExperience = "小红书内容运营：日更原创内容 150+ 篇，沉淀精准用户 300+ 人";
+  const publicAccountExperience = "公众号运营：每周产出 3-4 篇原创内容，累计完成 50+ 篇";
+  const communityExperience = "社群运营：搭建并维护 4 个用户社群，记录日留存数据";
+  const weakExperience = "校园推广活动执行：完成市场调研与线下活动物料协调";
+  const source = [contentExperience, publicAccountExperience, communityExperience, weakExperience].join("\n");
+  const draft = [
+    "核心优势",
+    contentExperience,
+    publicAccountExperience,
+    weakExperience,
+    "教育背景",
+    "新闻学本科",
+    "其他实践",
+    communityExperience
+  ].join("\n");
+
+  const result = evaluateRoleFitImpact({
+    sourceText: source,
+    draftText: draft,
+    strategy: {
+      priorityEvidence: [contentExperience, publicAccountExperience, communityExperience],
+      deprioritizedEvidence: [weakExperience],
+      highlights: []
+    }
+  });
+
+  assert.equal(result.passed, true);
+  assert.equal(result.checks.some((item) => /关联较弱/.test(item)), false);
+});

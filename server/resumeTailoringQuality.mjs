@@ -58,10 +58,14 @@ export function evaluateRoleFitImpact({ sourceText, draftText, strategy = {} }) 
     );
   }
 
+  const frontPriorityPositions = matchedInDraft
+    .filter((location) => location.position < 0.5)
+    .map((location) => location.position);
+  const lastFrontPriorityPosition = Math.max(...frontPriorityPositions);
   for (const fragment of deprioritized) {
     const location = locateEvidence(fragment, draft);
-    if (location && location.position < 0.5 && location.matchedLength >= 10) {
-      checks.push(`与岗位关联较弱的经历仍占据成稿前半部分，应压缩或后置：${truncate(fragment)}`);
+    if (location && (!frontPriorityPositions.length || location.position < lastFrontPriorityPosition) && location.matchedLength >= 10) {
+      checks.push(`与岗位关联较弱的经历仍排在核心证据之前，应压缩或后置：${truncate(fragment)}`);
     }
   }
 
@@ -158,7 +162,10 @@ function locateEvidence(fragment, text) {
   if (!target) return null;
 
   const targetBigrams = bigrams(target);
-  const targetNumbers = new Set(target.match(/\d+(?:\.\d+)?%?/g) || []);
+  const targetNumbers = new Set(
+    (target.match(/\d+(?:\.\d+)?%?/g) || [])
+      .filter((number) => !isDateLikeNumber(number))
+  );
 
   const candidates = [];
   let charOffset = 0;
@@ -197,6 +204,10 @@ function normalizeForMatch(value) {
   return String(value || "")
     .replace(/[\s，。；、:：|｜\-•·"'"“”‘’（）()【】《》]/g, "")
     .toLowerCase();
+}
+
+function isDateLikeNumber(value) {
+  return /^(?:19|20)\d{2}(?:\.\d{1,2})?$/.test(String(value || ""));
 }
 
 function bigrams(value) {
