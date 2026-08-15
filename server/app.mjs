@@ -267,6 +267,8 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       }
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("X-Frame-Options", "SAMEORIGIN");
+      res.setHeader("Content-Security-Policy", "frame-ancestors 'self'; object-src 'none'; base-uri 'none'");
       res.setHeader("Content-Type", metadata.mimeType);
       res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(metadata.originalName || req.params.name)}`);
       res.sendFile(join(uploadDir, req.params.name));
