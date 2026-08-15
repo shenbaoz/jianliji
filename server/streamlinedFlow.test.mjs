@@ -27,13 +27,15 @@ test("public refinement shows neutral progress and does not expose AI, score, or
   assert.doesNotMatch(publicSurface, /DeepSeek|Kimi|AI |ATS|评分|匹配度|岗位分析|招聘者质检/);
 });
 
-test("completion presents original and refined views, concrete changes, and one download action", async () => {
+test("completion presents a clean refined resume, concrete changes, and one download action", async () => {
   const editor = await read("src/components/EditorView.tsx");
 
-  assert.match(editor, /原版/);
-  assert.match(editor, /整理后/);
+  assert.match(editor, /可投递成稿/);
+  assert.match(editor, /ResumeDocument/);
+  assert.match(editor, /preparedPdf\?\.portraitDataUrl/);
   assert.match(editor, /已删减|已整理|已重写/);
   assert.match(editor, /handleDownloadPdf/);
+  assert.doesNotMatch(editor, /<iframe/);
   assert.doesNotMatch(editor, /onClick=\{handleSaveVersion\}|qualityPositive && <QualityMeterCard|contentEditable/);
 });
 

@@ -18,13 +18,12 @@ test("refinement button does not pass a click event as resume input", async () =
   assert.match(app, /onGenerate=\{refine\}/);
 });
 
-test("the A4 editor preview is scaled to its actual mobile container", async () => {
+test("the A4 editor preview stays readable inside its mobile viewport", async () => {
   const editor = await read("src/components/EditorView.tsx");
 
-  assert.match(editor, /new ResizeObserver\(updatePreviewScale\)/);
-  assert.match(editor, /window\.addEventListener\("resize", updatePreviewScale\)/);
-  assert.match(editor, /transform: `scale\(\$\{previewScale\}\)`/);
-  assert.match(editor, /height: previewHeight > 0 \? `\$\{previewHeight\}px` : undefined/);
+  assert.match(editor, /editor-preview-viewport/);
+  assert.match(editor, /w-\[210mm\]/);
+  assert.doesNotMatch(editor, /new ResizeObserver\(updatePreviewScale\)/);
 });
 
 test("shared pages expose the responsive presentation contract", async () => {
@@ -49,6 +48,7 @@ test("the resume preview recognizes the AI core-advantages section", async () =>
   const documentSource = await read("src/components/ResumeDocument.tsx");
 
   assert.match(documentSource, /sectionTitles[\s\S]*"核心优势"/);
+  assert.match(documentSource, /sectionTitles[\s\S]*"技能与优势"/);
   assert.match(documentSource, /sectionTitles[\s\S]*"技能特长"/);
   assert.doesNotMatch(documentSource, /contactParts\[0\][\s\S]*1\*{10}/);
   assert.match(documentSource, /\{parsed\.phone &&/);
