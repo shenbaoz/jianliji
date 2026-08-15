@@ -52,6 +52,7 @@ test("the resume preview recognizes the AI core-advantages section", async () =>
   assert.match(documentSource, /sectionTitles[\s\S]*"实习及项目经历"/);
   assert.match(documentSource, /sectionTitles[\s\S]*"专业技能"/);
   assert.match(documentSource, /sectionTitles[\s\S]*"获奖经历"/);
+  assert.match(documentSource, /sectionTitles[\s\S]*"荣誉奖项"/);
   assert.match(documentSource, /sectionTitles[\s\S]*"技能特长"/);
   assert.doesNotMatch(documentSource, /contactParts\[0\][\s\S]*1\*{10}/);
   assert.match(documentSource, /\{parsed\.phone &&/);
