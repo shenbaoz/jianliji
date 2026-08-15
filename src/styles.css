@@ -1568,7 +1568,8 @@ button.admin-module-card {
 @media (max-width: 700px) {
   .public-editorial-shell .editorial-landing { min-height: calc(100svh - 52px); padding: 16px; }
   .public-editorial-shell .editorial-hero-canvas { min-height: max(520px, calc(100svh - 84px)); border-width: 10px; border-radius: 22px; }
-  .public-editorial-shell .editorial-hero-canvas h1 { font-size: clamp(44px, 12vw, 58px); }
+  /* Keep each deliberate headline line intact on narrow phone screens. */
+  .public-editorial-shell .editorial-hero-canvas h1 { font-size: 34px; letter-spacing: -.06em; line-height: 1.04; }
   .public-editorial-shell .editorial-actions { margin-top: 34px; }
   .public-editorial-shell .editorial-actions button { min-width: 126px; min-height: 48px; }
 }
