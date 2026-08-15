@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+import base64
 
 import pymupdf
 
@@ -20,6 +21,46 @@ def normalize(value):
     value = re.sub(r"\s+", "", str(value or ""))
     value = re.sub(r"^[•·\-]+", "", value)
     return re.sub(r"[，。；：、,.!！?？]", "", value)
+
+
+def extract_source_portrait(source_path):
+    """Return the most likely resume headshot without inventing an image."""
+    document = pymupdf.open(source_path)
+    candidates = []
+    try:
+        for page_number in range(min(2, document.page_count)):
+            page = document[page_number]
+            for image in page.get_images(full=True):
+                xref = image[0]
+                metadata = document.extract_image(xref)
+                image_bytes = metadata.get("image")
+                width = int(metadata.get("width") or 0)
+                height = int(metadata.get("height") or 0)
+                if not image_bytes or len(image_bytes) > 1_500_000:
+                    continue
+                ratio = width / max(1, height)
+                if ratio < 0.45 or ratio > 1.5:
+                    continue
+                rects = page.get_image_rects(xref)
+                if not rects:
+                    continue
+                for rect in rects:
+                    # Resume portraits are normally compact images near the upper edge.
+                    if rect.y0 > page.rect.height * 0.48:
+                        continue
+                    if rect.width < 32 or rect.height < 32:
+                        continue
+                    position_bonus = 2 if rect.x0 > page.rect.width * 0.45 else 0
+                    shape_bonus = 2 if 0.7 <= ratio <= 1.25 else 0
+                    score = position_bonus + shape_bonus + min(rect.width * rect.height / 2500, 4)
+                    candidates.append((score, metadata.get("ext") or "png", image_bytes))
+    finally:
+        document.close()
+    if not candidates:
+        return None
+    _, extension, image_bytes = max(candidates, key=lambda item: item[0])
+    mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}.get(extension.lower(), "png")
+    return {"bytes": image_bytes, "data_url": f"data:image/{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"}
 
 
 def rect_key(rect):
@@ -261,6 +302,7 @@ def restore_source_page(document, source_document, page_number):
 
 def create_versions(payload):
     pymupdf.TOOLS.set_small_glyph_heights(True)
+    portrait = extract_source_portrait(payload["source_path"])
     source_document = pymupdf.open(payload["source_path"])
     document = pymupdf.open(payload["source_path"])
     review_marks = []
@@ -488,6 +530,9 @@ def create_versions(payload):
         ],
         "unchangedPages": sorted(unchanged_pages),
         "pageCountVerified": True,
+        "portraitApplied": portrait is not None,
+        "portraitDataUrl": portrait["data_url"] if portrait else None,
+        "portrait": portrait,
     }
 
 
@@ -513,7 +558,7 @@ def generated_lines(value, width=46):
     return result
 
 
-def create_generated_resume_pdf(payload):
+def create_generated_resume_pdf(payload, portrait=None):
     """Render a readable, recruiter-first fallback when source-template edits are unsafe."""
     text = str(payload.get("optimized_text") or "").strip()
     if not text:
@@ -531,6 +576,8 @@ def create_generated_resume_pdf(payload):
     has_header_name = bool(lines and len(normalize(lines[0])) <= 20)
     name = lines[0] if has_header_name else "求职者"
     page.insert_text((margin, y), name, fontname=font_name, fontsize=21, color=(0.08, 0.20, 0.18))
+    if portrait:
+        page.insert_image(pymupdf.Rect(478, 38, 537, 112), stream=portrait["bytes"], keep_proportion=True)
     y += 34
     page.draw_line((margin, y), (549, y), color=(0.08, 0.28, 0.24), width=1.5)
     y += 22
@@ -567,17 +614,17 @@ def create_generated_resume_pdf(payload):
     coverage = len(actual) / max(1, len(expected))
     if "□" in extracted or "�" in extracted or coverage < 0.55:
         raise RuntimeError("generated resume text verification failed")
-    return {"portraitApplied": False, "textVerified": True}
+    return {"portraitApplied": portrait is not None, "portraitDataUrl": portrait["data_url"] if portrait else None, "textVerified": True}
 
 
 if __name__ == "__main__":
     request = json.load(sys.stdin)
     result = create_versions(request)
     if result["changedLineCount"] == 0:
-        generated = create_generated_resume_pdf(request)
+        generated = create_generated_resume_pdf(request, result.pop("portrait", None))
         result["deliveryMode"] = "generated-template"
         result.update(generated)
     else:
         result["deliveryMode"] = "source-template"
-        result["portraitApplied"] = False
+        result.pop("portrait", None)
     json.dump(result, sys.stdout, ensure_ascii=False)

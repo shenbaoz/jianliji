@@ -28,6 +28,14 @@ export type ResumeTemplate = {
   accent: string;
 };
 
+export type PreparedPdf = {
+  fileUrl: string;
+  reviewFileUrl: string;
+  deliveryMode: "source-template" | "generated-template";
+  portraitApplied: boolean;
+  portraitDataUrl?: string;
+};
+
 export type SavedResumeVersion = {
   id: string;
   createdAt: string;
@@ -49,6 +57,7 @@ export type SavedResumeVersion = {
   originalResumeMimeType?: string;
   originalResumeFileUrl?: string;
   originalResumeDataUrl?: string;
+  preparedPdf?: PreparedPdf;
 };
 
 export type UnlockInterest = {

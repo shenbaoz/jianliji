@@ -36,6 +36,8 @@ test("createEditedPdfVersions preserves the original page and image while produc
       { before: "Managed event operations", after: "Led event operations" }
     ], "the API must report only changes actually written into the PDF");
     assert.equal(result.pageCountVerified, true, "the editor must explicitly report its page-count verification");
+    assert.equal(result.portraitApplied, true, "an existing source portrait should be preserved for the result preview");
+    assert.match(result.portraitDataUrl || "", /^data:image\//, "the result preview should receive the extracted source portrait");
     assert.deepEqual(result.unchangedPages, [], "a safely edited page must not be reported as rolled back");
 
     const sourcePdf = await PdfLibDocument.load(sourceBuffer);

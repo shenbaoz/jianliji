@@ -66,7 +66,8 @@ export async function createEditedPdfVersions({ originalResumeFileUrl, text, cha
     unchangedPages: Array.isArray(result.unchangedPages) ? result.unchangedPages : [],
     pageCountVerified: true,
     deliveryMode: result.deliveryMode === "generated-template" ? "generated-template" : "source-template",
-    portraitApplied: result.portraitApplied === true
+    portraitApplied: result.portraitApplied === true,
+    portraitDataUrl: typeof result.portraitDataUrl === "string" ? result.portraitDataUrl : undefined
   };
 }
 

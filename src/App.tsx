@@ -3,6 +3,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Header } from "./components/Header";
 import { LandingView } from "./components/LandingView";
 import { optimizeWithDeepSeek } from "./services/aiOptimize";
+import { createEditedPdfPreview } from "./services/pdfFileEditor";
 import { ResumeStartView } from "./components/ResumeStartView";
 import type { AppView, ResumeInput, SavedResumeVersion } from "./types";
 
@@ -13,7 +14,7 @@ const initialInput: ResumeInput = { candidateName: "", targetRole: "", resumeTex
 export default function App() {
   const [view, setView] = useState<AppView>("home");
   const [input, setInput] = useState<ResumeInput>(initialInput);
-  const [result, setResult] = useState<{ text: string; changes: Array<{ before: string; after: string }>; highlights?: string[] } | null>(null);
+  const [result, setResult] = useState<{ text: string; changes: Array<{ before: string; after: string }>; highlights?: string[]; preparedPdf?: Awaited<ReturnType<typeof createEditedPdfPreview>> } | null>(null);
   const [message, setMessage] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const inFlight = useRef(false);
@@ -38,8 +39,11 @@ export default function App() {
       const normalized = { ...nextInput, targetRole: nextInput.targetRole.trim() || "通用求职版" };
       const refined = await optimizeWithDeepSeek(normalized);
       if (!refined.safe || !refined.text.trim()) throw new Error(refined.suggestions?.[0] || "信息较少，请补充一件你具体做过的事后再试。");
+      const preparedPdf = normalized.originalResumeFileUrl && /pdf/i.test(normalized.originalResumeMimeType || "")
+        ? await createEditedPdfPreview(normalized.originalResumeFileUrl, refined.text, refined.changes || [])
+        : undefined;
       setInput(normalized);
-      setResult({ text: refined.text, changes: refined.changes || [], highlights: refined.highlights || [] });
+      setResult({ text: refined.text, changes: refined.changes || [], highlights: refined.highlights || [], preparedPdf });
       go("editor");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "暂时无法完成整理，请稍后再试。");
@@ -53,7 +57,8 @@ export default function App() {
     name: input.candidateName || "简历", title: "通用简历", candidateName: input.candidateName || "简历", targetRole: "通用简历", score: 0, templateId: "fresh",
     resumeText: input.resumeText, jobDescription: "", optimizedText: result.text, experience: result.text, changes: result.changes, highlights: result.highlights,
     originalResumeHtml: input.originalResumeHtml, originalResumeFileName: input.originalResumeFileName, originalResumeMimeType: input.originalResumeMimeType,
-    originalResumeFileUrl: input.originalResumeFileUrl, originalResumeDataUrl: input.originalResumeDataUrl
+    originalResumeFileUrl: input.originalResumeFileUrl, originalResumeDataUrl: input.originalResumeDataUrl,
+    preparedPdf: result.preparedPdf
   } : undefined;
 
   return <div className="public-editorial-shell min-h-screen bg-white font-sans text-[#20211f]">

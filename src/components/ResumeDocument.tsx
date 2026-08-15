@@ -6,6 +6,7 @@ import type { ResumeTemplate } from "../types";
 type Props = {
   text: string;
   template: ResumeTemplate;
+  portraitDataUrl?: string;
 };
 
 const sectionTitles = new Set([
@@ -96,7 +97,7 @@ function lineClassName(line: string) {
   return "resume-line";
 }
 
-export const ResumeDocument = memo(function ResumeDocument({ text, template }: Props) {
+export const ResumeDocument = memo(function ResumeDocument({ text, template, portraitDataUrl }: Props) {
   const parsed = parseResumeText(text);
   const visibleSections = parsed.sections.filter((section) => !hiddenDocumentSections.has(section.title));
   const templateClass = `resume-template-${template.id}`;
@@ -122,6 +123,7 @@ export const ResumeDocument = memo(function ResumeDocument({ text, template }: P
             {parsed.city}
           </li>}
         </ul>
+        {portraitDataUrl && <img className="resume-document-portrait" src={portraitDataUrl} alt={`${parsed.name}的头像`} />}
       </header>
 
       <div className="resume-document-body">

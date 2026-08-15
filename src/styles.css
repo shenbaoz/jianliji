@@ -351,7 +351,7 @@ h3 {
 
 .resume-document-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 24px;
   align-items: end;
   padding-bottom: 16px;
@@ -390,6 +390,14 @@ h3 {
   align-items: center;
   gap: 7px;
   white-space: nowrap;
+}
+
+.resume-document-portrait {
+  width: 64px;
+  height: 78px;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--resume-accent) 35%, white);
+  background: #f3f5f2;
 }
 
 .resume-document-body {

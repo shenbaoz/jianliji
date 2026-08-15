@@ -289,7 +289,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
         res.status(404).json({ error: "原 PDF 已失效，请重新上传简历。" });
         return;
       }
-      const { cleanOutputName, reviewOutputName, changedLineCount, appliedChanges, deliveryMode, portraitApplied } = await createEditedPdfVersions({ ...(req.body || {}), uploadDir });
+      const { cleanOutputName, reviewOutputName, changedLineCount, appliedChanges, deliveryMode, portraitApplied, portraitDataUrl } = await createEditedPdfVersions({ ...(req.body || {}), uploadDir });
       const cleanMetadata = await registerStoredFile(uploadDir, cleanOutputName, {
         owner: sourceMetadata.owner,
         fileType: "pdf",
@@ -308,7 +308,8 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
         changedLineCount,
         appliedChanges,
         deliveryMode,
-        portraitApplied
+        portraitApplied,
+        portraitDataUrl
       });
     } catch (error) {
       next(error);

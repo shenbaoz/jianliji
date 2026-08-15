@@ -1,171 +1,37 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Download } from "lucide-react";
-import DOMPurify from "dompurify";
 import { ResumeDocument } from "./ResumeDocument";
-import { applyTextToDocxPreview } from "../services/docxFileEditor";
-import { createEditedPdfPreview } from "../services/pdfFileEditor";
-import type { PdfDeliveryMode } from "../services/pdfFileEditor";
 import { getVisibleResumeTemplates } from "../services/templates";
 import { buildResumeChangeSet } from "../services/changeExamples";
 import type { SavedResumeVersion } from "../types";
-
-function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ["div", "span", "p", "br", "table", "tbody", "thead", "tr", "td", "th", "img", "ul", "ol", "li", "b", "strong", "i", "em", "u", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "section", "article", "style"],
-    ALLOWED_ATTR: ["class", "style", "src", "alt", "width", "height", "colspan", "rowspan", "id"],
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "link", "meta"],
-    FORBID_ATTR: ["onload", "onerror", "onclick", "onmouseover", "onfocus", "onblur"]
-  });
-}
 
 interface EditorViewProps {
   currentVersion?: SavedResumeVersion;
 }
 
 export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
-  const pdfRef = useRef<HTMLDivElement>(null);
-  const previewViewportRef = useRef<HTMLDivElement>(null);
   const [exportMessage, setExportMessage] = useState("");
-  const [previewScale, setPreviewScale] = useState(1);
-  const [previewHeight, setPreviewHeight] = useState(0);
   const resumeExperience = currentVersion?.experience || "暂无成稿内容。请先放入简历、填写目标岗位并补充真实证据。";
   const sourceResume = currentVersion?.resumeText || "";
-  const originalResumeHtml = currentVersion?.originalResumeHtml?.includes("original-pdf-document")
-    ? undefined
-    : currentVersion?.originalResumeHtml;
-  const originalResumeFileUrl = currentVersion?.originalResumeFileUrl;
   const originalResumeMimeType = currentVersion?.originalResumeMimeType || "";
-  const originalResumeDataUrl = currentVersion?.originalResumeDataUrl;
-  const hasOriginalResumePreview = Boolean(originalResumeHtml || originalResumeFileUrl);
-  const shouldShowOriginalFile = Boolean(originalResumeFileUrl && /pdf/i.test(originalResumeMimeType));
-  const canSyncOriginalDocx = Boolean(/docx/i.test(originalResumeMimeType) && (originalResumeDataUrl || originalResumeFileUrl));
-  const docxTooLargeForSync = Boolean(originalResumeDataUrl && originalResumeDataUrl.length > 8_000_000);
-  const canSyncOriginalPdf = Boolean(shouldShowOriginalFile && originalResumeFileUrl);
+  const isPdfResume = /pdf/i.test(originalResumeMimeType);
   const generatedResumeText = stripNonResumeNotes(currentVersion?.optimizedText || resumeExperience);
-  const [editableResumeText, setEditableResumeText] = useState(generatedResumeText);
-  const [editableOriginalHtml, setEditableOriginalHtml] = useState("");
-  const [editedPdfUrl, setEditedPdfUrl] = useState("");
-  const [reviewPdfUrl, setReviewPdfUrl] = useState("");
-  const [pdfDeliveryMode, setPdfDeliveryMode] = useState<PdfDeliveryMode | "">("");
-  const [fileSyncMessage, setFileSyncMessage] = useState("");
-  const [previewMode, setPreviewMode] = useState<"original" | "refined">("refined");
+  const preparedPdf = currentVersion?.preparedPdf;
   const template = getVisibleResumeTemplates().find((item) => item.id === currentVersion?.templateId) || getVisibleResumeTemplates()[0];
   const resumeChanges = useMemo(
-    () => currentVersion?.changes || buildResumeChangeSet(sourceResume, editableResumeText),
-    [currentVersion?.changes, sourceResume, editableResumeText]
+    () => currentVersion?.changes || buildResumeChangeSet(sourceResume, generatedResumeText),
+    [currentVersion?.changes, sourceResume, generatedResumeText]
   );
-  // A generated URL alone is not proof that the original PDF accepted a
-  // safe text replacement. Never label an unchanged source PDF as refined.
-  const canPublish = canSyncOriginalPdf
-    ? Boolean(editedPdfUrl && pdfDeliveryMode)
-    : true;
-
-  useEffect(() => {
-    setEditableResumeText(generatedResumeText);
-    setEditableOriginalHtml(!shouldShowOriginalFile && originalResumeHtml ? originalResumeHtml : "");
-  }, [generatedResumeText, originalResumeHtml, shouldShowOriginalFile]);
-
-  useEffect(() => {
-    if (!canSyncOriginalDocx) return;
-    if (docxTooLargeForSync) {
-      setFileSyncMessage("DOCX 文件较大，已停用实时版式同步，右侧显示原文件。");
-      return;
-    }
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      setFileSyncMessage("正在同步到右侧版式...");
-      try {
-        const html = await applyTextToDocxPreview({ dataUrl: originalResumeDataUrl, fileUrl: originalResumeFileUrl }, editableResumeText);
-        if (!cancelled) {
-          setEditableOriginalHtml(html);
-          setFileSyncMessage("已同步到右侧版式。");
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setFileSyncMessage(error instanceof Error ? error.message : "同步失败，请重新上传 DOCX。");
-        }
-      }
-    }, 500);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [canSyncOriginalDocx, docxTooLargeForSync, editableResumeText, originalResumeDataUrl, originalResumeFileUrl]);
-
-  useEffect(() => {
-    if (!canSyncOriginalPdf || !originalResumeFileUrl) return;
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      setFileSyncMessage("正在生成成品简历...");
-      try {
-        const nextUrls = await createEditedPdfPreview(originalResumeFileUrl, editableResumeText, resumeChanges);
-        if (!cancelled) {
-          setEditedPdfUrl(nextUrls.fileUrl);
-          setReviewPdfUrl(nextUrls.reviewFileUrl);
-          setPdfDeliveryMode(nextUrls.deliveryMode);
-          setFileSyncMessage("优化后的简历已生成，可下载。");
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setFileSyncMessage(error instanceof Error ? error.message : "PDF 同步失败。");
-        }
-      }
-    }, 1000);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [canSyncOriginalPdf, editableResumeText, originalResumeFileUrl, sourceResume]);
-
-  const updatePreviewScale = useCallback(() => {
-    const viewport = previewViewportRef.current;
-    const paper = pdfRef.current;
-    if (!viewport || !paper) return;
-    const availableWidth = viewport.clientWidth;
-    const paperWidth = paper.offsetWidth;
-    if (!availableWidth || !paperWidth) return;
-    const nextScale = Math.min(1, availableWidth / paperWidth);
-    setPreviewScale(nextScale);
-    setPreviewHeight(Math.ceil(paper.scrollHeight * nextScale));
-  }, []);
-
-  useEffect(() => {
-    const viewport = previewViewportRef.current;
-    const paper = pdfRef.current;
-    if (!viewport || !paper) return;
-
-    updatePreviewScale();
-    const observer = new ResizeObserver(updatePreviewScale);
-    observer.observe(viewport);
-    observer.observe(paper);
-    window.addEventListener("resize", updatePreviewScale);
-    const frame = window.requestAnimationFrame(updatePreviewScale);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", updatePreviewScale);
-      window.cancelAnimationFrame(frame);
-    };
-  }, [updatePreviewScale]);
-
-  useEffect(() => {
-    updatePreviewScale();
-  }, [editableResumeText, editableOriginalHtml, editedPdfUrl, reviewPdfUrl, updatePreviewScale]);
+  const canPublish = !isPdfResume || Boolean(preparedPdf?.fileUrl);
 
   const handleDownloadPdf = () => {
-    if (!pdfRef.current || !canPublish) {
-      setExportMessage(canSyncOriginalPdf && editedPdfUrl ? "这份模板暂未找到可安全写回的位置，已保留原文件；请调整后重试。" : "成品简历正在生成，请稍候几秒。");
+    if (!canPublish) {
+      setExportMessage("成品简历正在准备，请稍候。");
       return;
     }
-    if (canSyncOriginalPdf) {
-      if (!editedPdfUrl) {
-        setExportMessage("成品 PDF 正在生成，请稍候几秒再下载。");
-        return;
-      }
+    if (isPdfResume && preparedPdf?.fileUrl) {
       const link = document.createElement("a");
-      link.href = editedPdfUrl;
+      link.href = preparedPdf.fileUrl;
       link.download = "优化后简历.pdf";
       document.body.appendChild(link);
       link.click();
@@ -184,7 +50,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">成品简历</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">{pdfDeliveryMode === "generated-template" ? "已按专业求职结构重新排版，重点突出真实经历与成果。" : "保留原有模板与页数，只整理已有经历的表达。"}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">已按专业求职结构整理，重点突出真实经历与成果。</p>
             </div>
             <div className="editor-header-actions flex flex-wrap gap-2">
               <button type="button" onClick={handleDownloadPdf} disabled={!canPublish} className="inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33] disabled:cursor-not-allowed disabled:bg-slate-300">
@@ -194,37 +60,16 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
             </div>
           </div>
           <p className={canPublish ? "mt-4 text-xs font-medium text-emerald-700" : "mt-4 text-xs font-medium text-amber-700"}>
-            {exportMessage || fileSyncMessage || (canPublish ? "成品简历已生成，可导出无红线 PDF。" : "正在生成成品简历...")}
+            {exportMessage || (canPublish ? "成品简历已生成，可导出无红线 PDF。" : "正在生成成品简历...")}
           </p>
         </div>
         <OptimizationHighlightsCard highlights={currentVersion?.highlights} />
         <ChangeCompareCard changes={resumeChanges} />
         <div className="border border-slate-200 bg-[#e9ece8] p-4 sm:p-8">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex gap-2" role="tablist" aria-label="简历对比"><button type="button" role="tab" aria-selected={previewMode === "original"} onClick={() => setPreviewMode("original")}>原版</button><button type="button" role="tab" aria-selected={previewMode === "refined"} onClick={() => setPreviewMode("refined")}>整理后</button></div>
-              <span className="text-xs text-slate-500">{previewMode === "original" ? "上传的原文件" : "可投递成稿"}</span>
-            </div>
-            <div
-              ref={previewViewportRef}
-              className="editor-preview-viewport mx-auto w-full max-w-[900px] overflow-auto custom-scrollbar"
-              style={{ height: previewHeight > 0 ? `${previewHeight}px` : undefined }}
-            >
-              <div
-                ref={pdfRef}
-                className="resume-print-area mx-auto w-[210mm] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.12)] outline-none focus:ring-2 focus:ring-sky-500"
-                style={{ transform: `scale(${previewScale})`, transformOrigin: "top left" }}
-                spellCheck={false}
-                aria-label={previewMode === "original" ? "原版简历" : "整理后的简历"}
-              >
-                {shouldShowOriginalFile && originalResumeFileUrl ? (
-                  <PdfFilePreview src={previewMode === "original" ? originalResumeFileUrl : editedPdfUrl || originalResumeFileUrl} isUpdating={Boolean(fileSyncMessage.startsWith("正在"))} />
-                ) : editableOriginalHtml ? (
-                  <div className="original-resume-preview" dangerouslySetInnerHTML={{ __html: sanitizeHtml(editableOriginalHtml) }} />
-                ) : originalResumeFileUrl ? (
-                  <iframe className="h-[297mm] w-full border-0 bg-white" src={originalResumeFileUrl} title="原始简历预览" />
-                ) : (
-                  <ResumeDocument text={previewMode === "original" ? sourceResume : editableResumeText} template={template} />
-                )}
+            <div className="mb-4 flex items-center justify-between"><span className="text-sm font-medium text-slate-800">可投递成稿</span><span className="text-xs text-slate-500">已完成</span></div>
+            <div className="editor-preview-viewport mx-auto w-full max-w-[900px] overflow-auto custom-scrollbar">
+              <div className="resume-print-area mx-auto w-[210mm] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.12)] outline-none focus:ring-2 focus:ring-sky-500" spellCheck={false} aria-label="整理后的简历">
+                <ResumeDocument text={generatedResumeText} template={template} portraitDataUrl={preparedPdf?.portraitDataUrl} />
               </div>
             </div>
         </div>
@@ -232,15 +77,6 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
     </section>
   );
 };
-
-function PdfFilePreview({ src, isUpdating }: { src: string; isUpdating: boolean }) {
-  return (
-    <div className="pdf-canvas-preview relative bg-[#e9ece8]" aria-busy={isUpdating}>
-      <iframe className="h-[297mm] w-full border-0 bg-white" src={src} title="简历 PDF 预览" />
-      {isUpdating && <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-slate-950/90 px-4 py-2 text-xs font-medium text-white shadow-lg">正在同步优化文字…</div>}
-    </div>
-  );
-}
 
 function stripNonResumeNotes(text: string) {
   return text
