@@ -14,7 +14,7 @@ if (typeof window !== "undefined") {
   });
 }
 
-export function getDefaultManagedTemplates(): ManagedResumeTemplate[] {
+function getDefaultManagedTemplates(): ManagedResumeTemplate[] {
   return resumeTemplates.map((template) => ({
     ...template,
     enabled: true

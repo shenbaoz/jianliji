@@ -41,14 +41,3 @@ test("requires database and AI provider secrets in production", () => {
 test("does not block local development configuration", () => {
   assert.doesNotThrow(() => validateProductionConfig({ NODE_ENV: "development" }));
 });
-
-test("requires a secure ONLYOFFICE configuration when original-file editing is enabled", () => {
-  assert.throws(
-    () => validateProductionConfig({
-      ...secureConfig,
-      ONLYOFFICE_PUBLIC_URL: "http://resume.example.com/onlyoffice/",
-      ONLYOFFICE_JWT_SECRET: "short"
-    }),
-    /ONLYOFFICE_PUBLIC_URL.*ONLYOFFICE_JWT_SECRET/s
-  );
-});

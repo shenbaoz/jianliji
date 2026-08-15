@@ -10,7 +10,7 @@ export type EditableUnlockPlan = {
 
 const pricingKey = "resume-job-fit-admin-pricing";
 
-export function getDefaultPricePlans(): EditableUnlockPlan[] {
+function getDefaultPricePlans(): EditableUnlockPlan[] {
   return unlockPlans.map((plan) => ({
     id: plan.id,
     name: plan.name,

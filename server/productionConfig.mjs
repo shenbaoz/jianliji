@@ -31,25 +31,8 @@ export function validateProductionConfig(env = process.env) {
     }
   }
 
-  if (env.ONLYOFFICE_PUBLIC_URL && !isOnlyOfficeHttpsUrl(env.ONLYOFFICE_PUBLIC_URL)) {
-    errors.push("ONLYOFFICE_PUBLIC_URL must be an HTTPS URL ending with a slash.");
-  }
-
-  if (env.ONLYOFFICE_PUBLIC_URL && String(env.ONLYOFFICE_JWT_SECRET || "").length < 32) {
-    errors.push("ONLYOFFICE_JWT_SECRET must contain at least 32 characters.");
-  }
-
   if (errors.length) {
     throw new Error(`Unsafe production configuration:\n- ${errors.join("\n- ")}`);
-  }
-}
-
-function isOnlyOfficeHttpsUrl(value) {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "https:" && parsed.pathname.endsWith("/");
-  } catch {
-    return false;
   }
 }
 

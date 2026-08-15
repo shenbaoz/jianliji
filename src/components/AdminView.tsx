@@ -12,7 +12,6 @@ import {
   UsersRound,
   WalletCards
 } from "lucide-react";
-import { resumeTemplates } from "../data/templates";
 import { loadPricePlans, resetPricePlans, savePricePlans, type EditableUnlockPlan } from "../services/pricing";
 import {
   deleteUnlockInterest,

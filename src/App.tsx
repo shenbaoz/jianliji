@@ -50,7 +50,7 @@ export default function App() {
   };
   const version: SavedResumeVersion | undefined = result ? {
     id: "current-refinement", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    name: input.candidateName || "简历", title: "通用简历", candidateName: input.candidateName || "简历", targetRole: "通用简历", score: 0, templateId: "classic",
+    name: input.candidateName || "简历", title: "通用简历", candidateName: input.candidateName || "简历", targetRole: "通用简历", score: 0, templateId: "fresh",
     resumeText: input.resumeText, jobDescription: "", optimizedText: result.text, experience: result.text, changes: result.changes, highlights: result.highlights,
     originalResumeHtml: input.originalResumeHtml, originalResumeFileName: input.originalResumeFileName, originalResumeMimeType: input.originalResumeMimeType,
     originalResumeFileUrl: input.originalResumeFileUrl, originalResumeDataUrl: input.originalResumeDataUrl

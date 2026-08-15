@@ -25,16 +25,6 @@ pm2 start ecosystem.config.cjs
 pm2 save
 ```
 
-### 原文件编辑（ONLYOFFICE）
-
-原版简历编辑使用官方 ONLYOFFICE Document Server，不再由本项目改写 PDF 字体或版式。在服务器项目目录创建 `.env` 后执行：
-
-```bash
-docker compose -f deploy/docker-compose.onlyoffice.yml up -d
-```
-
-将 Document Server 仅绑定到本机 `127.0.0.1:8088`，然后使用 `deploy/nginx-znhil.conf` 中的 `/onlyoffice/` 反向代理。Node API 与 Document Server 必须使用同一个 `ONLYOFFICE_JWT_SECRET`；`ONLYOFFICE_CALLBACK_TOKEN` 必须是另一条至少 32 位的随机值。部署前须保留 ONLYOFFICE 的版权和许可证声明，并遵守其 AGPLv3 条款。
-
 接口固定监听 `127.0.0.1:3102`，不需要也不应开放 3102 公网端口。发布新版本时先运行 `npm ci && npm test && npm run build`，成功后再执行 `pm2 reload resume-fit-api --update-env`。
 
 ## 3. Nginx

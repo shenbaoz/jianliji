@@ -89,42 +89,6 @@ function getResumeLines(text) {
     .filter(Boolean);
 }
 
-export function groupPdfTextItemsIntoLines(items) {
-  const rows = [];
-  items
-    .map((item) => {
-      if (!item?.str?.trim()) return null;
-      const [, , , fontHeight, x, y] = item.transform;
-      return {
-        text: item.str,
-        x,
-        y,
-        width: typeof item.width === "number" ? item.width : item.str.length * Math.abs(fontHeight) * 0.6,
-        fontHeight: Math.max(Math.abs(fontHeight) || 8, 7)
-      };
-    })
-    .filter(Boolean)
-    .sort((left, right) => right.y - left.y || left.x - right.x)
-    .forEach((item) => {
-      const row = rows.find((current) => Math.abs(current[0].y - item.y) < Math.max(4, item.fontHeight * 0.45));
-      if (row) row.push(item);
-      else rows.push([item]);
-    });
-
-  return rows.map((row) => {
-    const sorted = row.slice().sort((left, right) => left.x - right.x);
-    const first = sorted[0];
-    const right = Math.max(...sorted.map((item) => item.x + item.width));
-    return {
-      text: sorted.map((item) => item.text).join(" ").trim(),
-      x: first.x,
-      y: Math.min(...sorted.map((item) => item.y)),
-      width: right - first.x,
-      fontHeight: Math.max(...sorted.map((item) => item.fontHeight))
-    };
-  });
-}
-
 function normalizeReviewText(value) {
   return String(value || "").replace(/\s+/g, "").replace(/^[•·\-]+/, "").replace(/[，。；：、,.!！?？]/g, "");
 }
