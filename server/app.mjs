@@ -2,12 +2,13 @@ import express from "express";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
-import { timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
-import { createEditedPdfVersions } from "./pdfEditor.mjs";
+import { createEditedPdfVersions, createGeneratedResumePdf } from "./pdfEditor.mjs";
+import { convertPdfToDocx, editDocxText } from "./wordEditor.mjs";
 import { detectResumeFileType, parseResumeFile, ResumeParseError } from "./resumeParser.mjs";
+import { mergeBasicInfo, normalizeBasicInfo } from "./basicInfoMerge.mjs";
 import { interestSchema, versionSchema } from "./validation.mjs";
 
 const resumeUploadLimitBytes = 10 * 1024 * 1024;
@@ -136,9 +137,10 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
         res.status(503).json({ error: "AI 优化尚未配置。请由管理员在服务器设置 DEEPSEEK_API_KEY。" });
         return;
       }
-      const { resumeText, targetRole, jobDescription = "", evidenceAnswers = [], sourceMode = "resume" } = req.body || {};
+      const { resumeText, targetRole, jobDescription = "", evidenceAnswers = [], sourceMode = "resume", basicInfo } = req.body || {};
       const isUniversal = sourceMode === "universal";
       const normalizedTargetRole = typeof targetRole === "string" && targetRole.trim() ? targetRole.trim() : "通用求职版";
+      const normalizedBasicInfo = normalizeBasicInfo(basicInfo);
       if (
         typeof resumeText !== "string" || !resumeText.trim() ||
         (!isUniversal && (
@@ -153,14 +155,15 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
         resumeText.length > 100_000 ||
         (typeof targetRole === "string" && targetRole.length > 200) ||
         (typeof jobDescription === "string" && jobDescription.length > 40_000) ||
-        safeEvidenceAnswers.some((item) => item.length > 5_000)
+        safeEvidenceAnswers.some((item) => item.length > 5_000) ||
+        Object.values(normalizedBasicInfo).some((value) => value.length > 120)
       ) {
         res.status(413).json({ error: "提交内容过长，请精简简历、岗位描述或补充证据后重试。" });
         return;
       }
       const result = isUniversal && typeof aiClient.optimizeUniversal === "function"
         ? await aiClient.optimizeUniversal({ resumeText })
-        : await aiClient.optimize({ resumeText, targetRole: normalizedTargetRole, jobDescription, evidenceAnswers: safeEvidenceAnswers, sourceMode: isUniversal ? "universal" : (sourceMode === "creator" ? "creator" : "resume"), skippedFollowUp: req.body?.skippedFollowUp === true });
+        : await aiClient.optimize({ resumeText, targetRole: normalizedTargetRole, jobDescription, evidenceAnswers: safeEvidenceAnswers, sourceMode: isUniversal ? "universal" : (sourceMode === "creator" ? "creator" : "resume"), skippedFollowUp: req.body?.skippedFollowUp === true, basicInfo: { name: normalizedBasicInfo.name, school: normalizedBasicInfo.school, major: normalizedBasicInfo.major, degree: normalizedBasicInfo.degree } });
       const text = typeof result?.text === "string"
         ? result.text
           .replace(/\{\{(?:PHONE|EMAIL)_\d+\}\}/g, "")
@@ -169,7 +172,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
           .join("\n")
           .trim()
         : result?.text;
-      res.json({ ...result, text });
+      res.json({ ...result, text: mergeBasicInfo(text, normalizedBasicInfo) });
     } catch (error) {
       next(error);
     }
@@ -270,7 +273,8 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       res.setHeader("X-Frame-Options", "SAMEORIGIN");
       res.setHeader("Content-Security-Policy", "frame-ancestors 'self'; object-src 'none'; base-uri 'none'");
       res.setHeader("Content-Type", metadata.mimeType);
-      res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(metadata.originalName || req.params.name)}`);
+      const disposition = req.query.download === "1" ? "attachment" : "inline";
+      res.setHeader("Content-Disposition", `${disposition}; filename*=UTF-8''${encodeURIComponent(metadata.originalName || req.params.name)}`);
       res.sendFile(join(uploadDir, req.params.name));
     } catch (error) {
       if (error?.code === "ENOENT") {
@@ -311,6 +315,93 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
         portraitApplied,
         portraitDataUrl
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/export-pdf", pdfEditLimiter, async (req, res, next) => {
+    try {
+      const visitorId = req.get("X-Visitor-Id");
+      if (typeof visitorId !== "string" || !/^[a-zA-Z0-9_-]{16,80}$/.test(visitorId)) {
+        res.status(400).json({ error: "浏览器标识无效，请刷新页面后重试。" });
+        return;
+      }
+      const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+      if (text.length < 2) {
+        res.status(400).json({ error: "成品简历内容不能为空。" });
+        return;
+      }
+      if (text.length > 100_000) {
+        res.status(413).json({ error: "成品简历内容过长，请精简后重试。" });
+        return;
+      }
+      const { cleanOutputName } = await createGeneratedResumePdf({ text, uploadDir });
+      const metadata = await registerStoredFile(uploadDir, cleanOutputName, {
+        owner: visitorId,
+        fileType: "pdf",
+        mimeType: "application/pdf",
+        originalName: "优化后简历.pdf"
+      });
+      res.status(201).json({ fileUrl: storedFileUrl(cleanOutputName, metadata.token) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/export-word", pdfEditLimiter, async (req, res, next) => {
+    try {
+      const visitorId = req.get("X-Visitor-Id");
+      if (typeof visitorId !== "string" || !/^[a-zA-Z0-9_-]{16,80}$/.test(visitorId)) {
+        res.status(400).json({ error: "浏览器标识无效，请刷新页面后重试。" });
+        return;
+      }
+      const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+      if (text.length < 2) {
+        res.status(400).json({ error: "成品简历内容不能为空。" });
+        return;
+      }
+      if (text.length > 100_000) {
+        res.status(413).json({ error: "成品简历内容过长，请精简后重试。" });
+        return;
+      }
+      const pdfUrl = typeof req.body?.pdfUrl === "string" ? req.body.pdfUrl : "";
+      const docxUrl = typeof req.body?.docxUrl === "string" ? req.body.docxUrl : "";
+      const deliveryMode = req.body?.deliveryMode === "generated-template" ? "generated-template" : "source-template";
+      let docxName;
+      if (pdfUrl) {
+        // PDF 源：直接转换已精修的成品 PDF（原版式 + 优化文字）为可编辑 docx
+        const source = parseStoredFileUrl(pdfUrl);
+        const sourceMetadata = source ? await authorizeStoredFile(uploadDir, source.name, source.token) : null;
+        if (!sourceMetadata || sourceMetadata.fileType !== "pdf") {
+          res.status(404).json({ error: "原 PDF 已失效，请重新上传简历。" });
+          return;
+        }
+        docxName = `${randomUUID()}.docx`;
+        await convertPdfToDocx({ pdfPath: join(uploadDir, source.name), docxPath: join(uploadDir, docxName), deliveryMode });
+      } else if (docxUrl) {
+        // DOCX 源：直接在源文档上替换段落文字，保留照片与版式
+        const source = parseStoredFileUrl(docxUrl);
+        const sourceMetadata = source ? await authorizeStoredFile(uploadDir, source.name, source.token) : null;
+        if (!sourceMetadata || sourceMetadata.fileType !== "docx") {
+          res.status(404).json({ error: "原 DOCX 已失效，请重新上传简历。" });
+          return;
+        }
+        const sourceBuffer = await readFile(join(uploadDir, source.name));
+        const edited = await editDocxText({ docxBuffer: sourceBuffer, text });
+        docxName = `${randomUUID()}.docx`;
+        await writeFile(join(uploadDir, docxName), edited);
+      } else {
+        res.status(400).json({ error: "缺少可导出的简历源文件，请重新上传简历。" });
+        return;
+      }
+      const metadata = await registerStoredFile(uploadDir, docxName, {
+        owner: visitorId,
+        fileType: "docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        originalName: "优化后简历.docx"
+      });
+      res.status(201).json({ fileUrl: storedFileUrl(docxName, metadata.token) });
     } catch (error) {
       next(error);
     }

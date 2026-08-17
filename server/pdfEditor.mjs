@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -74,6 +74,27 @@ export async function createEditedPdfVersions({ originalResumeFileUrl, text, cha
 export async function createEditedPdf(options) {
   const { cleanOutputName } = await createEditedPdfVersions(options);
   return cleanOutputName;
+}
+
+export async function createGeneratedResumePdf({ text, uploadDir = defaultUploadDir }) {
+  const lines = getResumeLines(text);
+  if (!lines.length) throw new Error("成品文字不能为空。");
+  const cleanOutputName = `${randomUUID()}.pdf`;
+  const reviewOutputName = `${randomUUID()}.pdf`;
+  const reviewPath = join(uploadDir, reviewOutputName);
+  try {
+    const result = await runPyMuPdfEditor({
+      force_generated: true,
+      clean_path: join(uploadDir, cleanOutputName),
+      review_path: reviewPath,
+      font_path: await findChineseFontPath(),
+      optimized_text: text
+    });
+    if (result.textVerified !== true) throw new Error("成品 PDF 文字校验失败。");
+    return { cleanOutputName };
+  } finally {
+    await rm(reviewPath, { force: true });
+  }
 }
 
 function getUploadFileName(fileUrl) {

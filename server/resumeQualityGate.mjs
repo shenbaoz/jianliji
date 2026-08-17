@@ -6,6 +6,21 @@ const WEAK_OPENERS = ["负责日常", "负责相关", "参与日常", "协助日
 const TEMPLATE_PHRASES = ["良好的沟通能力", "工作认真负责", "获得领导好评", "学习能力强", "性格开朗", "团队合作精神", "抗压能力强", "积极向上", "吃苦耐劳", "良好的团队协作能力", "较强的事业心", "具备良好的", "沟通协调能力", "多任务抗压能力强"];
 const QUANT_PATTERN = /\d+(?:\.\d+)?\s*(?:%|％|人|个|次|项|篇|万|亿|单|户|家|份|条|款|张|件|批|轮|版|页|名|位|天|周|月|年|小时|分钟|倍|家|款|门|类)?/;
 
+// 从零创建模式：用户事实稿只有求职意愿、没有具体经历时，AI 常会编造
+// "拥有XX运营经验"式的具体经历。下面两条规则用于兜底拦截。
+const CREATOR_INTENT_PATTERN = /(?:我想|希望|想|打算|计划|目标|意向|求职|应聘|找|投递)[^，。\n]{0,24}(?:工作|岗位|职位|方向|简历|实习)?/g;
+const CREATOR_FACT_OBJECTS = /运营|负责|参与|组织|策划|设计|开发|写过|做过|整理|剪辑|拍摄|管理|创建|搭建|担任|实习|兼职|课程|社团|项目|公众号|账号|活动|视频|文章|文案|数据|排版|海报|脚本|编辑|编写|维护|推广|拉新|社群|客户|店铺|销售|客服|测试|代码|平台/;
+const FABRICATED_EXPERIENCE_PATTERN = /(?:拥有|具备|有)(?:过)?(?:从零运营|独立运营|运营|管理|负责|参与|组织|策划|搭建|维护|创建|经营|撰写|设计|开发|完成|开展)[^，。\n]{2,40}?(?:经验|经历|账号|平台|项目|店铺|社群|体系|能力)/g;
+
+export function hasSubstantiveCreatorFacts(sourceText) {
+  const cleaned = String(sourceText || "").replace(CREATOR_INTENT_PATTERN, "").replace(/[，。；、\s]+/g, "");
+  return cleaned.length >= 6 && CREATOR_FACT_OBJECTS.test(cleaned);
+}
+
+export function findFabricatedExperienceClaims(draft) {
+  return [...new Set(String(draft || "").match(FABRICATED_EXPERIENCE_PATTERN) || [])].slice(0, 3);
+}
+
 export function evaluateUniversalRefinement({ sourceText, draft, changes }) {
   const source = String(sourceText || "").trim();
   const text = String(draft || "").trim();
@@ -78,6 +93,13 @@ export function evaluateResumeQuality({ sourceText, evidenceAnswers = [], target
     checks.push("改写幅度不足，成稿与原简历过于相似");
   }
   const reviewFlags = findUnverifiedClaims(sourceText, text, evidenceAnswers);
+  // 从零创建模式兜底：用户没有提供具体经历时，成稿中出现"拥有XX经验"
+  // 式的具体经历断言视为编造，直接拦下并提示（宁可占位，不虚构）。
+  if (!preservesExistingLayout && !hasSubstantiveCreatorFacts(sourceText)) {
+    for (const claim of findFabricatedExperienceClaims(text)) {
+      reviewFlags.push(`新增经历“${claim}”未在用户提供的信息中找到。`);
+    }
+  }
   checks.push(...reviewFlags);
   if (roleFit) checks.push(...roleFit.checks);
   if (qa.verdict === "repair") checks.push(...(Array.isArray(qa.issues) ? qa.issues : ["招聘者质检未通过"]));

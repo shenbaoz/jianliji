@@ -132,3 +132,36 @@ test("quality gate passes a draft that front-loads the target role's priority ev
   assert.equal(result.passed, true);
   assert.deepEqual(result.highlights, ["前置小红书与公众号的内容运营证据"]);
 });
+
+test("creator gate rejects fabricated concrete experience when user gave no facts", () => {
+  const result = evaluateResumeQuality({
+    sourceText: "我想找新媒体运营的工作",
+    draft: "个人优势\n拥有从零运营个人社交媒体账号的真实经验，负责账号定位与选题策划",
+    targetRole: "新媒体运营",
+    sourceMode: "creator"
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.reviewFlags.some((item) => /新增经历/.test(item)));
+});
+
+test("creator gate allows experience based on real user facts", () => {
+  const result = evaluateResumeQuality({
+    sourceText: "我在学院新媒体中心负责公众号推文排版，组织过迎新活动",
+    draft: "个人优势\n- 负责公众号推文排版与发布，组织校园迎新活动",
+    targetRole: "新媒体运营",
+    sourceMode: "creator"
+  });
+
+  assert.equal(result.passed, false); // 仍会因"无实际改写"等其他检查不通过，但不能出现编造经历 flag
+  assert.ok(!result.reviewFlags.some((item) => /新增经历/.test(item)));
+});
+
+test("hasSubstantiveCreatorFacts distinguishes intent-only from real facts", async () => {
+  const { hasSubstantiveCreatorFacts, findFabricatedExperienceClaims } = await import("./resumeQualityGate.mjs");
+  assert.equal(hasSubstantiveCreatorFacts("我想找新媒体运营的工作"), false);
+  assert.equal(hasSubstantiveCreatorFacts("我在学院新媒体中心负责公众号排版"), true);
+  assert.equal(hasSubstantiveCreatorFacts("做过公众号排版和视频剪辑"), true);
+  const claims = findFabricatedExperienceClaims("拥有从零运营个人社交媒体账号的真实经验");
+  assert.ok(claims.length > 0);
+});

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 import { ResumeDocument } from "./ResumeDocument";
 import { getVisibleResumeTemplates } from "../services/templates";
 import { buildResumeChangeSet } from "../services/changeExamples";
+import { downloadResumeWord } from "../services/wordExporter";
 import type { SavedResumeVersion } from "../types";
 
 interface EditorViewProps {
@@ -29,9 +30,14 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
       setExportMessage("成品简历正在准备，请稍候。");
       return;
     }
-    if (isPdfResume && preparedPdf?.fileUrl) {
+    if (preparedPdf?.fileUrl) {
+      if (isWeChatBrowser()) {
+        window.location.assign(preparedPdf.fileUrl);
+        setExportMessage("已打开 PDF 预览，请使用右上角菜单保存或转发。");
+        return;
+      }
       const link = document.createElement("a");
-      link.href = preparedPdf.fileUrl;
+      link.href = withDownloadFlag(preparedPdf.fileUrl);
       link.download = "优化后简历.pdf";
       document.body.appendChild(link);
       link.click();
@@ -39,8 +45,23 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
       setExportMessage("已下载无红线的成品 PDF。");
       return;
     }
-    setExportMessage("已打开浏览器打印窗口，请选择“保存为 PDF”。");
-    window.print();
+    setExportMessage("成品 PDF 正在准备，请稍候。");
+  };
+
+  const handleDownloadWord = () => {
+    try {
+      // PDF 源：转换已精修的成品 PDF（保留原版式与照片）；DOCX 源：直接在源文档上替换文字
+      const source = isPdfResume
+        ? (preparedPdf?.fileUrl ? { pdfUrl: preparedPdf.fileUrl, deliveryMode: preparedPdf.deliveryMode } : undefined)
+        : (/docx/i.test(originalResumeMimeType) && currentVersion?.originalResumeFileUrl
+            ? { docxUrl: currentVersion.originalResumeFileUrl }
+            : undefined);
+      void downloadResumeWord(generatedResumeText, "优化后简历.docx", source).then((usedOriginalLayout) => {
+        setExportMessage(usedOriginalLayout ? "已生成保留原版式与照片的 Word 文档，可下载后继续编辑。" : "已下载 Word 文档，可用 Word 或 WPS 打开继续编辑。");
+      });
+    } catch {
+      setExportMessage("Word 导出失败，请刷新页面后重试。");
+    }
   };
 
   return (
@@ -53,14 +74,18 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
               <p className="mt-2 text-sm leading-6 text-slate-500">已按专业求职结构整理，重点突出真实经历与成果。</p>
             </div>
             <div className="editor-header-actions flex flex-wrap gap-2">
-              <button type="button" onClick={handleDownloadPdf} disabled={!canPublish} className="inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33] disabled:cursor-not-allowed disabled:bg-slate-300">
+              <button type="button" onClick={handleDownloadWord} className="inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33]">
                 <Download size={14} />
+                下载 Word
+              </button>
+              <button type="button" onClick={handleDownloadPdf} disabled={!canPublish} className="inline-flex h-10 items-center gap-2 rounded-sm border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+                <FileText size={14} />
                 打印 / 保存 PDF
               </button>
             </div>
           </div>
           <p className={canPublish ? "mt-4 text-xs font-medium text-emerald-700" : "mt-4 text-xs font-medium text-amber-700"}>
-            {exportMessage || (canPublish ? "成品简历已生成，可导出无红线 PDF。" : "正在生成成品简历...")}
+            {exportMessage || (canPublish ? "成品简历已生成，可下载 Word 继续编辑，或导出无红线 PDF。" : "正在生成成品简历...")}
           </p>
         </div>
         <OptimizationHighlightsCard highlights={currentVersion?.highlights} />
@@ -88,6 +113,16 @@ function stripNonResumeNotes(text: string) {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function withDownloadFlag(fileUrl: string) {
+  const url = new URL(fileUrl, window.location.href);
+  url.searchParams.set("download", "1");
+  return url.toString();
+}
+
+function isWeChatBrowser() {
+  return /MicroMessenger|wxwork/i.test(navigator.userAgent);
 }
 
 function OptimizationHighlightsCard({ highlights }: { highlights?: string[] }) {

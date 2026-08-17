@@ -104,3 +104,16 @@ test("existing-resume prompts require restrained HR-first highlights", () => {
   assert.match(rewrite, /没有原始指标时不得补造数字/);
   assert.match(rewrite, /禁止为制造差异而全篇重写/);
 });
+
+test("existing-resume prompts preserve the source owner of every experience item", () => {
+  const resumeInput = { ...input, sourceMode: "resume" };
+  const strategy = buildStrategyMessages(resumeInput).map((item) => item.content).join("\n");
+  const rewrite = buildRewriteMessages(resumeInput, {}).map((item) => item.content).join("\n");
+  const qa = buildQaMessages(resumeInput, {}, "正文").map((item) => item.content).join("\n");
+  const repair = buildRepairMessages(resumeInput, {}, "正文", ["经历归属错误"]).map((item) => item.content).join("\n");
+
+  for (const prompt of [strategy, rewrite, qa, repair]) {
+    assert.match(prompt, /不得.*并入.*公司|不得.*归并.*公司/);
+    assert.match(prompt, /归属不明/);
+  }
+});

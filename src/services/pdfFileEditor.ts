@@ -33,6 +33,25 @@ export async function createEditedPdfPreview(originalResumeFileUrl: string, text
   };
 }
 
+export async function createGeneratedPdf(text: string): Promise<PreparedPdf> {
+  const response = await fetch(`${apiBase}/api/export-pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getVisitorHeaders() },
+    body: JSON.stringify({ text })
+  });
+  const payload = (await response.json().catch(() => null)) as { fileUrl?: string; error?: string } | null;
+  if (!response.ok || !payload?.fileUrl) throw new Error(payload?.error || "PDF 生成失败。");
+  const fileUrl = resolveApiUrl(payload.fileUrl);
+  return {
+    fileUrl,
+    reviewFileUrl: fileUrl,
+    changedLineCount: 0,
+    appliedChanges: [],
+    deliveryMode: "generated-template",
+    portraitApplied: false
+  };
+}
+
 function resolveApiUrl(value: string) {
   return value.startsWith("/api/") ? `${apiBase}${value}` : value;
 }

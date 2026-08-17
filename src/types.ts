@@ -6,6 +6,26 @@ export type WorkflowStep =
 
 export type AppView = WorkflowStep;
 
+export type BasicInfo = {
+  name: string;
+  school: string;
+  major: string;
+  degree: string;
+  phone: string;
+  email: string;
+  city: string;
+};
+
+export const emptyBasicInfo: BasicInfo = {
+  name: "",
+  school: "",
+  major: "",
+  degree: "",
+  phone: "",
+  email: "",
+  city: ""
+};
+
 export type ResumeInput = {
   candidateName: string;
   targetRole: string;
@@ -13,6 +33,7 @@ export type ResumeInput = {
   resumeText: string;
   jobDescription: string;
   sourceMode?: "resume" | "creator";
+  basicInfo?: BasicInfo;
   originalResumeHtml?: string;
   originalResumeFileName?: string;
   originalResumeMimeType?: string;
@@ -31,6 +52,8 @@ export type ResumeTemplate = {
 export type PreparedPdf = {
   fileUrl: string;
   reviewFileUrl: string;
+  changedLineCount: number;
+  appliedChanges: Array<{ before: string; after: string }>;
   deliveryMode: "source-template" | "generated-template";
   portraitApplied: boolean;
   portraitDataUrl?: string;
@@ -50,6 +73,7 @@ export type SavedResumeVersion = {
   resumeText: string;
   jobDescription: string;
   optimizedText: string;
+  basicInfo?: BasicInfo;
   changes?: Array<{ before: string; after: string }>;
   highlights?: string[];
   originalResumeHtml?: string;

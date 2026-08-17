@@ -1,11 +1,13 @@
 import { getApiBase } from "./apiBase";
 import { getVisitorHeaders } from "./storage";
+import type { BasicInfo } from "../types";
 
 const apiBase = getApiBase();
 
 export type ParsedResumeFile = {
   text: string;
   candidateName?: string;
+  basicInfo?: Partial<BasicInfo>;
   originalResumeFileName?: string;
   originalResumeMimeType?: string;
   originalResumeFileUrl?: string;
@@ -33,6 +35,7 @@ export async function parseResumeFile(file: File): Promise<ParsedResumeFile> {
   return {
     text: payload.text,
     candidateName: payload.candidateName,
+    basicInfo: payload.basicInfo,
     originalResumeFileName: payload.originalResumeFileName,
     originalResumeMimeType: payload.originalResumeMimeType,
     originalResumeFileUrl: payload.originalResumeFileUrl?.startsWith("/api/")

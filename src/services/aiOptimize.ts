@@ -3,13 +3,21 @@ import type { ResumeInput } from "../types";
 
 type AiOptimizeResponse = { provider: "deepseek" | "kimi"; model: string; text: string; changes?: Array<{ before: string; after: string }>; suggestions?: string[]; highlights?: string[]; quality?: { verdict: "ready" | "needs_evidence"; score: number; checks: string[]; highlights?: string[] }; reviewFlags?: string[]; safe?: boolean };
 
-export async function optimizeWithDeepSeek(input: ResumeInput, evidenceAnswers: string[] = []): Promise<AiOptimizeResponse> {
-  const skippedFollowUp = evidenceAnswers.length === 0;
+export async function optimizeWithDeepSeek(input: ResumeInput, evidenceAnswers: string[] = [], options: { skippedFollowUp?: boolean } = {}): Promise<AiOptimizeResponse> {
+  const skippedFollowUp = options.skippedFollowUp ?? evidenceAnswers.length === 0;
   try {
     const response = await fetch(`${getApiBase()}/api/ai/optimize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resumeText: input.resumeText, targetRole: input.targetRole, jobDescription: input.jobDescription, evidenceAnswers, sourceMode: input.sourceMode || "resume", skippedFollowUp }),
+      body: JSON.stringify({
+        resumeText: input.resumeText,
+        targetRole: input.targetRole,
+        jobDescription: input.jobDescription,
+        evidenceAnswers,
+        sourceMode: input.sourceMode || "resume",
+        skippedFollowUp,
+        basicInfo: input.basicInfo || undefined
+      }),
       signal: AbortSignal.timeout(240_000)
     });
     const payload = await response.json().catch(() => ({}));

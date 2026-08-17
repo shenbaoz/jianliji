@@ -104,13 +104,91 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// 只把姓名/学校/专业/学历这类"需要 AI 写进成稿"的基础信息传给提示词；
+// 电话、邮箱等联系方式由后端在成稿阶段确定性合并，不发送给 AI。
+function pickBasicInfoForPrompt(raw) {
+  const source = (raw && typeof raw === "object") ? raw : {};
+  const result = {};
+  for (const key of ["name", "school", "major", "degree"]) {
+    const value = typeof source[key] === "string" ? source[key].trim().slice(0, 80) : "";
+    if (value) result[key] = value;
+  }
+  return result;
+}
+
+const CN_DIGIT = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+
+function chineseToNumber(str) {
+  let total = 0;
+  let section = 0;
+  let num = 0;
+  for (const ch of str) {
+    if (ch in CN_DIGIT) {
+      num = CN_DIGIT[ch];
+    } else if (ch === "十") {
+      section += (num || 1) * 10;
+      num = 0;
+    } else if (ch === "百") {
+      section += num * 100;
+      num = 0;
+    } else if (ch === "千") {
+      section += num * 1000;
+      num = 0;
+    } else if (ch === "万") {
+      total += (section + num) * 10000;
+      section = 0;
+      num = 0;
+    } else {
+      return null;
+    }
+  }
+  const result = total + section + num;
+  return result || null;
+}
+
+// 把"三个月""两家客户"等中文数词展开为阿拉伯数字 token，避免
+// AI 把中文数字规范化为阿拉伯数字时被误判为"新增数字"。
+function collectNumericTokens(text) {
+  const tokens = (text.match(/\d+(?:\.\d+)?/g) || []).map(String);
+  const cnPattern = /[零一二两三四五六七八九十百千万]+(?=[个名位家天月年次场条款人份台套平米平方米平千米里斤吨元角分%％]|多|余|左右|$)/g;
+  for (const m of text.match(cnPattern) || []) {
+    const n = chineseToNumber(m);
+    if (n !== null && n !== 0) tokens.push(String(n));
+  }
+  return tokens;
+}
+
+// A draft number is trusted when it (a) appears verbatim in the source/evidence,
+// (b) its digits can be assembled, in order, from adjacent source tokens, or
+// (c) it matches a Chinese-numeral phrase from the source ("一个月" -> "1").
+// This tolerates formatting rewrites ("2011-09" -> "2011.09") and masked
+// contact digits ("181****9780" -> "1819780") without letting fabricated
+// quantities through ("与2名开发人员" when no "2" exists in the source).
+function isTrustedNumericToken(value, trustedNumbers) {
+  if (trustedNumbers.includes(value)) return true;
+  const plainValue = value.replace(/\D/g, "");
+  if (!plainValue) return false;
+  const plainTrusted = trustedNumbers.map((token) => token.replace(/\D/g, ""));
+  for (let i = 0; i < plainTrusted.length; i++) {
+    let acc = "";
+    for (let j = i; j < plainTrusted.length && j < i + 6; j++) {
+      acc += plainTrusted[j];
+      if (acc === plainValue) return true;
+      if (acc.length > plainValue.length) break;
+    }
+  }
+  return false;
+}
+
 export function findUnverifiedClaims(sourceText, draftText, evidenceAnswers = []) {
   const trusted = `${sourceText || ""}\n${evidenceAnswers.join("\n")}`;
   const output = String(draftText || "");
   const flags = [];
-  const trustedNumbers = new Set((trusted.match(/\b\d{2,}\b/g) || []).map(String));
-  for (const value of new Set(output.match(/\b\d{2,}\b/g) || [])) {
-    if (!trustedNumbers.has(value)) flags.push(`新增数字“${value}”未在原简历或补充证据中找到。`);
+  // Do not require word boundaries: English source resumes often express multipliers
+  // as "15x", while the Chinese rewrite renders the same evidence as "15 倍".
+  const trustedNumbers = collectNumericTokens(trusted);
+  for (const value of new Set(collectNumericTokens(output))) {
+    if (!isTrustedNumericToken(value, trustedNumbers)) flags.push(`新增数字“${value}”未在原简历或补充证据中找到。`);
   }
   const trustedTools = new Set((trusted.match(toolPattern) || []).map((value) => value.toLowerCase()));
   for (const value of new Set(output.match(toolPattern) || [])) {
@@ -121,6 +199,41 @@ export function findUnverifiedClaims(sourceText, draftText, evidenceAnswers = []
     if (output.includes(term) && !trusted.includes(term)) flags.push(`能力表述“${term}”未在原简历或补充证据中找到。`);
   }
   return flags.slice(0, 8);
+}
+
+// 从 reviewFlags 提取被标记的 token（数字/工具/经历断言），
+// 只在成稿中移除这些未验证 token 本身（含相邻量词），保留句子结构与优化效果。
+// 例如 "与 2 名开发人员协同推进项目迭代" -> "与开发人员协同推进项目迭代"。
+function autoStripUnverifiedClaims(draft, reviewFlags) {
+  let text = String(draft || "");
+  let removed = false;
+  const flags = Array.isArray(reviewFlags) ? reviewFlags : [];
+  for (const flag of flags) {
+    const capture = flag.match(/新增(?:数字|工具|经历)“([^”]+)”/);
+    if (!capture) continue;
+    const token = capture[1].trim();
+    if (!token) continue;
+    const esc = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // 数字：删除 token 及紧跟的量词（"2名""80%""15分钟"）。
+    // 前后加边界保护：{{PHONE_1}}、邮箱、版本号等占位符/标识里的数字不删除。
+    const pattern = new RegExp(
+      `(?<![\\dA-Za-z_])${esc}(?![\\dA-Za-z_])\\s*(?:%|％|人|个|次|项|篇|万|亿|单|户|家|份|条|款|张|件|批|轮|版|页|名|位|天|周|月|年|小时|分钟|倍|门|类|名开发人员)?`,
+      "g"
+    );
+    const next = text.replace(pattern, "");
+    if (next !== text) {
+      text = next;
+      removed = true;
+    }
+  }
+  if (!removed) return draft;
+  // 清理删除后残留的重复标点与多余空格
+  return text
+    .replace(/[，、；;：:]\s*[，、；;：:]/g, "，")
+    .replace(/[。；]\s*[。；]/g, "。")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function sanitizeResumeDraft(draftText, sourceText, evidenceAnswers = []) {
@@ -147,6 +260,75 @@ export function sanitizeResumeDraft(draftText, sourceText, evidenceAnswers = [])
     if (!trusted.includes(term)) text = text.split(term).join(replacement);
   }
   return text.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// 原文写了"至今"的经历，成稿必须保留"至今"：AI 改写有时会把时间段
+// 结尾的具体日期当作"完整"处理、或精简掉"至今"。这里按组织/职位锚点
+// 找到成稿中对应条目，若其时间段以具体年月结尾（无"至今"），则恢复"至今"。
+export function restoreOngoingDates(draftText, sourceText) {
+  const draft = String(draftText || "");
+  const source = String(sourceText || "");
+  // 同时覆盖中文"至今"与英文 "Present"（词边界防误匹配 "presentation"），
+  // 英文简历的持续状态不再只依赖 AI 自觉。
+  const need = (source.match(/至今/g) || []).length + (source.match(/\bPresent\b/gi) || []).length;
+  const have = (draft.match(/至今/g) || []).length + (draft.match(/\bPresent\b/gi) || []).length;
+  if (need === 0 || have >= need) return draft;
+
+  const sourceLines = source.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const anchors = [];
+  for (let i = 0; i < sourceLines.length; i++) {
+    const line = sourceLines[i];
+    if (!/至今/.test(line) && !/\bPresent\b/i.test(line)) continue;
+    // 组织/职位锚点优先取上一行（如 "品牌推广 | 大学搜题酱" / "Hepsiemlak"），
+    // 仅当上一行也是日期或不存在时才退回本行。
+    const previous = sourceLines[i - 1] || "";
+    const contextLine = previous && !/\d{4}\s*[./年]/.test(previous) ? previous : line;
+    const org = contextLine.split(/[|｜]/).map((part) => part.trim()).filter(Boolean).pop() || contextLine;
+    const name = org.replace(/\d{4}[./年]?\d{0,2}.*$/g, "").trim();
+    if (name && name.length >= 2 && !/^(?:至今|迄今|Present)$/i.test(name)) {
+      // 源条目开始日期：优先取锚点行内的日期（如 "Jan 2018 - Present" 同行）；
+      // 双栏碎片（"Dec 2021" 与 "Present" 分居两行）则向上 4 行内找最近日期，
+      // 供成稿条目完全丢失日期时补回 "开始-至今"。
+      let startDate = (line.match(/\d{4}\s*[./年]\s*\d{1,2}\s*月?/) || [])[0] || "";
+      if (!startDate) {
+        for (let k = i - 1; k >= Math.max(0, i - 4); k--) {
+          const m = sourceLines[k].match(/\d{4}\s*[./年]\s*\d{1,2}\s*月?|(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b\s*)?\d{4}\b/);
+          if (m) { startDate = m[0].trim(); break; }
+        }
+      }
+      anchors.push({ name, startDate });
+    }
+  }
+  if (anchors.length === 0) return draft;
+
+  let changed = false;
+  const lines = draft.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (const anchor of anchors) {
+    const idx = lines.findIndex((line) => line.includes(anchor.name));
+    if (idx < 0) continue;
+    // 日期可能在组织/职位行的下一行
+    const targetIdx = /\d{4}\s*[./年]/.test(lines[idx]) ? idx
+      : (lines[idx + 1] && /\d{4}\s*[./年]/.test(lines[idx + 1]) ? idx + 1 : -1);
+    if (targetIdx < 0) {
+      // 成稿条目完全丢失了日期（AI 把整段时间范围删掉了）：
+      // 追加 "开始日期-至今"（找不到开始日期则仅 "至今"），保证持续状态不丢。
+      const suffix = anchor.startDate ? ` | ${anchor.startDate}-至今` : " | 至今";
+      lines[idx] = lines[idx].replace(/\s+$/, "") + suffix;
+      changed = true;
+      continue;
+    }
+    const line = lines[targetIdx];
+    if (/至今/.test(line)) continue;
+    const rangeEnd = line.match(/(\d{4}\s*[./年]\s*\d{1,2}\s*月?)\s*[-–—~至]\s*(\d{4}\s*[./年]\s*\d{1,2}\s*月?)\s*$/);
+    if (rangeEnd) {
+      // $1 可能因 \s* 贪婪吞入尾随空格（"2021.06 - 2023.03" → "2021.06 "），
+      // trim 后再拼 "-至今"，保证输出 "2021.06-至今" 而非 "2021.06 -至今"。
+      lines[targetIdx] = line.replace(/(\d{4}\s*[./年]\s*\d{1,2}\s*月?)\s*[-–—~至]\s*\d{4}\s*[./年]\s*\d{1,2}\s*月?\s*$/, (_, start) => `${start.trim()}-至今`);
+      changed = true;
+    }
+  }
+  if (!changed) return draft;
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function createDeepSeekClient(options = {}) {
@@ -276,8 +458,11 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
       redacted.replacements
     );
     const draft = sanitizeResumeDraft(parsed?.text, sourceText);
-    const text = restoreSourceContact(
-      restoreCandidateName(restoreContacts(draft, redacted.replacements), candidateName),
+    const text = restoreOngoingDates(
+      restoreSourceContact(
+        restoreCandidateName(restoreContacts(draft, redacted.replacements), candidateName),
+        sourceText
+      ),
       sourceText
     );
     const changes = Array.isArray(parsed?.changes)
@@ -305,13 +490,30 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
 
   return {
     optimizeUniversal,
-    async optimize({ resumeText, targetRole, jobDescription, evidenceAnswers = [], sourceMode = "resume", skippedFollowUp = false, fastPolish = false }) {
+    async optimize({ resumeText, targetRole, jobDescription, evidenceAnswers = [], sourceMode = "resume", skippedFollowUp = false, fastPolish = false, basicInfo }) {
       if (sourceMode === "universal") return optimizeUniversal({ resumeText });
       if (!apiKey) throw new Error(`未配置 ${provider === "kimi" ? "KIMI_API_KEY" : "DEEPSEEK_API_KEY"}，已保留本地规则分析，不会发送简历内容。`);
       const redacted = redactAiPayload({ resumeText, targetRole, jobDescription, evidenceAnswers });
-      const input = { ...redacted.payload, sourceMode, skippedFollowUp };
+      const input = { ...redacted.payload, sourceMode, skippedFollowUp, basicInfo: pickBasicInfoForPrompt(basicInfo) };
       const { buildStrategyMessages, buildRewriteMessages, buildQaMessages, buildRepairMessages } = await import("./resumeOptimizationPrompts.mjs");
-      const { evaluateResumeQuality } = await import("./resumeQualityGate.mjs");
+      const { evaluateResumeQuality, hasSubstantiveCreatorFacts } = await import("./resumeQualityGate.mjs");
+      // 从零创建模式：用户没提供任何具体经历时，先追问而不是让 AI 编造。
+      // 用户回答后（evidenceAnswers 非空）或明确跳过（skippedFollowUp）才进入生成管线。
+      if (sourceMode === "creator" && !skippedFollowUp && evidenceAnswers.length === 0 && !hasSubstantiveCreatorFacts(resumeText)) {
+        return {
+          provider,
+          model,
+          text: "",
+          suggestions: [
+            "你具体做过哪些事？请举一件具体的（课程、社团、兼职、实习或项目都可以）。",
+            "你掌握哪些工具或技能？比如剪映、Excel、PS、公众号排版等。"
+          ],
+          reviewFlags: [],
+          safe: false,
+          highlights: [],
+          quality: { verdict: "needs_evidence", score: 0, checks: [], positive: { strongVerbCoverage: 0, quantifiedRatio: 0, templatePhrases: [], weakOpeners: [] }, highlights: [] }
+        };
+      }
       // 全管线共享一个总 deadline：任一调用按剩余时间收缩超时与重试，
       // 确保服务端在客户端等待窗口（240s）内返回，不出现客户端已放弃、服务端仍在调模型。
       const deadlineAt = Date.now() + pipelineDeadlineMs;
@@ -349,17 +551,34 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
       if (typeof qa.finalText === "string" && qa.finalText.trim()) draft = qa.finalText.trim();
       draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
       let quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa, strategy });
-      if (!quality.passed) {
+      let autoStripped = false;
+      // 最多两轮修复：让 AI 依据未验证清单自己删改并保持句子通顺（比删 token 保留更多语义）
+      let repairCount = 0;
+      while (!quality.passed && repairCount < 2) {
         draft = await completeWithRetry(buildRepairMessages(input, strategy, draft, quality.checks), false, 2200, undefined, deadlineAt);
         draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
         quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa: { verdict: "ready", score: qa.score || 80 }, strategy });
+        repairCount += 1;
       }
-      const text = restoreSourceContact(
-        restoreCandidateName(restoreContacts(draft, redacted.replacements), extractCandidateName(resumeText)),
+      if (!quality.passed && quality.reviewFlags?.length) {
+        // 修复轮之后仍包含未验证内容：删除未核实数字/工具 token 本身，
+        // 让用户拿到"去掉编造内容"的干净成稿，而不是只报错。
+        const cleaned = autoStripUnverifiedClaims(draft, quality.reviewFlags);
+        if (cleaned !== draft) {
+          draft = cleaned;
+          quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa: { verdict: "ready", score: qa.score || 80 }, strategy });
+          autoStripped = true;
+        }
+      }
+      const text = restoreOngoingDates(
+        restoreSourceContact(
+          restoreCandidateName(restoreContacts(draft, redacted.replacements), extractCandidateName(resumeText)),
+          resumeText
+        ),
         resumeText
       );
       const highlights = Array.isArray(quality.highlights) ? quality.highlights.slice(0, 3) : [];
-      return { provider, model, text, suggestions: Array.isArray(qa.suggestions) ? qa.suggestions.slice(0, 3) : [], reviewFlags: quality.reviewFlags, safe: quality.reviewFlags.length === 0, highlights, quality: { verdict: quality.passed ? "ready" : "needs_evidence", score: quality.score, checks: quality.checks, positive: quality.positive, highlights } };
+      if (autoStripped) highlights.push("AI 生成的部分内容未在你的简历中找到，已自动移除，确保成稿只保留真实信息。");      return { provider, model, text, suggestions: Array.isArray(qa.suggestions) ? qa.suggestions.slice(0, 3) : [], reviewFlags: quality.reviewFlags, safe: quality.reviewFlags.length === 0, highlights: highlights.slice(0, 3), quality: { verdict: quality.passed ? "ready" : "needs_evidence", score: quality.score, checks: quality.checks, positive: quality.positive, highlights: highlights.slice(0, 3) } };
     }
   };
 }

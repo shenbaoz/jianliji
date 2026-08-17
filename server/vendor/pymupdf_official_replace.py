@@ -13,6 +13,7 @@ import os
 import re
 import sys
 import base64
+import unicodedata
 
 import pymupdf
 
@@ -536,15 +537,30 @@ def create_versions(payload):
     }
 
 
+def normalize_compat_characters(value):
+    """仅把 CJK 兼容字（⼤=大、⼠=士、⼯=工，U+2F00 康熙部首区）规范化为标准汉字。
+
+    不能用全局 NFKC：它会把全角标点（，（）规范成半角（, (），破坏中文排版。
+    """
+    return "".join(
+        unicodedata.normalize("NFKC", ch) if (0x2E80 <= ord(ch) <= 0x2FDF) else ch
+        for ch in str(value or "")
+    )
+
+
 def generated_lines(value, width=46):
     result = []
     for source_line in str(value or "").splitlines():
-        line = source_line.strip()
+        # CJK 兼容字规范化为标准汉字，FontAwesome 等 PUA 图标字符
+        # 直接移除：这些字符会让 pdf2docx 转 Word 时丢字，且在中文字体下只是方框。
+        line = normalize_compat_characters(source_line)
+        line = "".join(ch for ch in line if not (0xE000 <= ord(ch) <= 0xF8FF))
+        line = line.replace("\x00", "").replace("�", "").replace("□", "").strip()
         if not line:
             continue
         prefix = ""
-        if line.startswith(("-", "•", "·")):
-            prefix, line = "• ", line[1:].strip()
+        if line.startswith(("-", "•", "·", "", "▪", "◦", "●", "○")):
+            prefix, line = "- ", line[1:].strip()
         while len(line) > width:
             cut = width
             for index in range(width, max(12, width - 10), -1):
@@ -573,8 +589,11 @@ def create_generated_resume_pdf(payload, portrait=None):
     margin = 46
     y = 50
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    has_header_name = bool(lines and len(normalize(lines[0])) <= 20)
-    name = lines[0] if has_header_name else "求职者"
+    first_line = lines[0] if lines else ""
+    labeled_name = re.match(r"^姓\s*名\s*[:：]\s*(.+)$", first_line)
+    is_meta_line = bool(re.match(r"^(?:求职目标|求职意向|联系方式)\s*[:：]", first_line))
+    has_header_name = bool(first_line and not is_meta_line and (labeled_name or len(normalize(first_line)) <= 20))
+    name = labeled_name.group(1).strip() if labeled_name else (first_line if has_header_name else "求职者")
     page.insert_text((margin, y), name, fontname=font_name, fontsize=21, color=(0.08, 0.20, 0.18))
     if portrait:
         page.insert_image(pymupdf.Rect(478, 38, 537, 112), stream=portrait["bytes"], keep_proportion=True)
@@ -619,12 +638,22 @@ def create_generated_resume_pdf(payload, portrait=None):
 
 if __name__ == "__main__":
     request = json.load(sys.stdin)
-    result = create_versions(request)
-    if result["changedLineCount"] == 0:
+    if request.get("force_generated"):
+        result = {
+            "changedLineCount": 0,
+            "appliedChanges": [],
+            "unchangedPages": [],
+            "pageCountVerified": True,
+            "deliveryMode": "generated-template",
+        }
+        result.update(create_generated_resume_pdf(request))
+    else:
+        result = create_versions(request)
+    if not request.get("force_generated") and result["changedLineCount"] == 0:
         generated = create_generated_resume_pdf(request, result.pop("portrait", None))
         result["deliveryMode"] = "generated-template"
         result.update(generated)
-    else:
+    elif not request.get("force_generated"):
         result["deliveryMode"] = "source-template"
         result.pop("portrait", None)
     json.dump(result, sys.stdout, ensure_ascii=False)

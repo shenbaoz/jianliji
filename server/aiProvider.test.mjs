@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDeepSeekClient, createFallbackAiClient, createKimiClient, findUnverifiedClaims, redactResumeContacts, sanitizeResumeDraft } from "./aiProvider.mjs";
+import { createDeepSeekClient, createFallbackAiClient, createKimiClient, findUnverifiedClaims, redactResumeContacts, restoreOngoingDates, sanitizeResumeDraft } from "./aiProvider.mjs";
 
 test("returns the universal refinement contract without role or job-description input", async () => {
   const requests = [];
@@ -230,6 +230,16 @@ test("flags metrics and tools that appear only in the AI draft", () => {
   assert.equal(flags.some((flag) => flag.includes("Excel")), false);
 });
 
+test("accepts a multiplier rewritten from x notation to Chinese", () => {
+  const flags = findUnverifiedClaims(
+    "Built an IndexedDB cache capable of making page load over 15x faster.",
+    "构建 IndexedDB 缓存，将页面加载速度提升 15 倍。",
+    []
+  );
+
+  assert.equal(flags.some((flag) => flag.includes("15")), false);
+});
+
 test("sanitizes unsupported ability upgrades and generic placeholders without deleting supported advantages", () => {
   const draft = `姓名：{{NAME}}\n电话：{{PHONE_n}}\n求职目标：运营实习生\n---\n核心优势\n- 熟练使用剪映\n- 独立完成排版\n- 参与校园活动\n- 性格开朗\n教育背景\n新闻学本科\n主修课程：消费者行为学、统计学基础`;
   const result = sanitizeResumeDraft(draft, "使用剪映，负责排版，参与校园活动", []);
@@ -237,6 +247,49 @@ test("sanitizes unsupported ability upgrades and generic placeholders without de
   assert.doesNotMatch(result, /^---+$|^主修课程\s*[:：]/m);
   assert.equal((result.match(/^-/gm) || []).length, 4);
   assert.match(result, /性格开朗/);
+});
+
+test("restores a Chinese 至今 and an English Present end date to the draft", () => {
+  // 中文"至今"：AI 把 2021.06-至今 改成了具体结束日期 → 恢复（含点号格式与空格清理）
+  const zh = restoreOngoingDates(
+    "大学搜题酱 | 品牌推广 | 2021.06 - 2023.03",
+    "品牌推广 | 大学搜题酱\n2021.06 - 至今"
+  );
+  assert.match(zh, /2021\.06-至今/);
+  assert.doesNotMatch(zh, /2021\.06\s+-至今/);
+  // 英文 "Present"：AI 把 Jan 2018 - Present 改成了具体结束日期 → 恢复为至今
+  const en = restoreOngoingDates(
+    "Hepsiemlak | 高级数据科学家 | 2018年1月 - 2024年6月",
+    "Senior Data Scientist\nHepsiemlak\nJan 2018 - Present"
+  );
+  assert.match(en, /2018年1月-至今/);
+  // 成稿已含"至今"时不做多余替换
+  const already = restoreOngoingDates(
+    "Hepsiemlak | 高级数据科学家 | 2021年12月 - 至今",
+    "Senior Data Scientist\nHepsiemlak\nJan 2018 - Present"
+  );
+  assert.match(already, /2021年12月 - 至今/);
+  // 词边界：presentation 不应被当作持续状态锚点
+  const noFalsePositive = restoreOngoingDates(
+    "Skill: presentation & communication",
+    "Skill: presentation & communication"
+  );
+  assert.equal(noFalsePositive, "Skill: presentation & communication");
+});
+
+test("re-inserts a dropped date range with 至今 when the draft entry has no date at all", () => {
+  // 双栏碎片：开始日期 "Dec 2021" 与 "Present" 分居两行，AI 整段删掉日期
+  const restored = restoreOngoingDates(
+    "Hepsiemlak | Senior Data Scientist\n- 设计并实施 ETL 管道。",
+    "Experience\nDec 2021\nSenior Data Scientist\nHepsiemlak\nPresent\n• Designed ETL pipeline"
+  );
+  assert.match(restored, /Hepsiemlak \| Senior Data Scientist \| Dec 2021-至今/);
+  // 无开始日期可回溯时也至少补 "至今"
+  const fallback = restoreOngoingDates(
+    "Hepsiemlak | Senior Data Scientist\n- 职责描述。",
+    "Hepsiemlak\nPresent\n• 职责描述。"
+  );
+  assert.match(fallback, /Hepsiemlak \| Senior Data Scientist \| 至今/);
 });
 
 test("normalizes markdown headings and restores a creator name omitted by the model", async () => {
@@ -268,7 +321,7 @@ test("normalizes markdown headings and restores a creator name omitted by the mo
   assert.doesNotMatch(result.text, /\*|姓名已脱敏/);
 });
 
-test("marks an AI draft unsafe when it introduces unverified claims", async () => {
+test("strips unverified claims instead of leaking them into the final resume", async () => {
   const client = createDeepSeekClient({
     apiKey: "test-key",
     fetchImpl: async () => new Response(JSON.stringify({ choices: [{ message: { content: "使用 Python 完成 300 名用户访谈" } }] }), { status: 200 })
@@ -276,8 +329,9 @@ test("marks an AI draft unsafe when it introduces unverified claims", async () =
 
   const result = await client.optimize({ resumeText: "使用 Excel 完成 12 名用户访谈", targetRole: "数据分析", jobDescription: "负责数据分析" });
 
-  assert.equal(result.safe, false);
-  assert.ok(result.reviewFlags.length > 0);
+  // 编造的数字 300 与工具 Python 必须被移除，不能出现在交付的成稿里
+  assert.equal(result.safe, true);
+  assert.doesNotMatch(result.text, /300|Python/);
 });
 
 test("treats resume text as untrusted reference data rather than instructions", async () => {

@@ -2,10 +2,11 @@ import { memo, useRef, useState, type ReactNode } from "react";
 import { ArrowRight, Eye, FileUp, Lock, PenLine, RotateCcw } from "lucide-react";
 import { ResumeDocument } from "./ResumeDocument";
 import { PageShell } from "./ProductShell";
+import { BasicInfoFields } from "./BasicInfoFields";
 import { parseResumeFile } from "../services/resumeFileParser";
 import { createOriginalResumePreview } from "../services/resumeOriginalPreview";
 import { getVisibleResumeTemplates } from "../services/templates";
-import type { ResumeInput } from "../types";
+import { emptyBasicInfo, type BasicInfo, type ResumeInput } from "../types";
 
 const resumeUploadLimitBytes = 10 * 1024 * 1024;
 const resumeUploadLimitText = "10MB";
@@ -22,6 +23,7 @@ type MobileTab = "edit" | "preview";
 export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRefining }: Props) {
   const [fileStatus, setFileStatus] = useState("");
   const [tab, setTab] = useState<MobileTab>("edit");
+  const [basicInfo, setBasicInfo] = useState<BasicInfo>({ ...emptyBasicInfo, ...(input.basicInfo || {}) });
   const uploadSeq = useRef(0);
   const resumeLength = input.resumeText.trim().length;
   const canContinue = resumeLength > 20;
@@ -29,6 +31,11 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
 
   const update = (field: keyof ResumeInput, value: string) => {
     onChange({ ...input, [field]: value });
+  };
+
+  const updateBasicInfo = (next: BasicInfo) => {
+    setBasicInfo(next);
+    onChange({ ...input, candidateName: next.name.trim() || input.candidateName, basicInfo: next });
   };
 
   const handleFile = async (file: File | undefined) => {
@@ -45,9 +52,12 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
         createOriginalResumePreview(file)
       ]);
       if (seq !== uploadSeq.current) return;
+      const nextBasicInfo = prefillBasicInfo(parsedResume.text, parsedResume.candidateName, parsedResume.basicInfo, basicInfo);
+      setBasicInfo(nextBasicInfo);
       onChange({
         ...input,
         candidateName: input.candidateName.trim() || parsedResume.candidateName || "",
+        basicInfo: nextBasicInfo,
         resumeText: parsedResume.text,
         originalResumeHtml: originalPreview.html,
         originalResumeFileName: parsedResume.originalResumeFileName || originalPreview.fileName,
@@ -101,7 +111,8 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
 
           <div className="border-b border-slate-200 p-5">
             <label className="mb-4 block text-sm font-semibold text-slate-800">求职方向 <span className="font-normal text-slate-500">（可选）</span><input className="mt-2 h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-normal" value={input.targetRole === "通用求职版" ? "" : input.targetRole} onChange={(event) => update("targetRole", event.target.value)} placeholder="例如：新媒体运营；不填则生成通用求职版" /></label>
-            <label className="flex min-h-44 cursor-pointer justify-center rounded-md border-2 border-dashed border-slate-300 px-6 py-9 hover:border-sky-400">
+            <BasicInfoFields value={basicInfo} onChange={updateBasicInfo} collapsed />
+            <label className="mt-5 flex min-h-44 cursor-pointer justify-center rounded-md border-2 border-dashed border-slate-300 px-6 py-9 hover:border-sky-400">
               <span className="text-center">
                 <FileUp size={44} className="mx-auto text-sky-700" />
                 <strong className="mt-4 block text-lg font-semibold text-slate-800">选择文件，或拖到这里</strong>
@@ -162,4 +173,29 @@ function MobileTabButton({ active, icon, label, onClick }: { active: boolean; ic
       <span>{label}</span>
     </button>
   );
+}
+
+function prefillBasicInfo(text: string, candidateName: string | undefined, serverBasicInfo: Partial<BasicInfo> | undefined, current: BasicInfo): BasicInfo {
+  // 服务端已从简历自动解析：优先采用，用户已手填的值不被覆盖
+  const phone = serverBasicInfo?.phone || text.match(/1[3-9]\d[- ]?\d{4}[- ]?\d{4}/)?.[0] || "";
+  const email = serverBasicInfo?.email || text.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i)?.[0] || "";
+  const school = serverBasicInfo?.school || extractSchoolName(text);
+  return {
+    ...current,
+    name: current.name || candidateName || serverBasicInfo?.name || "",
+    phone: current.phone || phone,
+    email: current.email || email,
+    school: current.school || school,
+    major: current.major || serverBasicInfo?.major || "",
+    degree: current.degree || serverBasicInfo?.degree || ""
+  };
+}
+
+function extractSchoolName(text: string) {
+  const lines = text.split(/\n+/).slice(0, 15);
+  for (const line of lines) {
+    const match = line.match(/([\u4e00-\u9fff]{2,10}(?:大学|学院))/);
+    if (match && !/(公司|集团|研究院|培训|机构)/.test(match[1])) return match[1];
+  }
+  return "";
 }

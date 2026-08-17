@@ -57,12 +57,13 @@ function parseResumeText(text: string) {
     .map((line) => line.trim())
     .filter(Boolean);
   const firstLineParts = (lines[0] || "求职者").split(/｜|\|/).map((item) => item.trim()).filter(Boolean);
-  const name = firstLineParts[0] || "求职者";
+  const isMetaFirstLine = /^(?:求职目标|求职意向|联系方式)\s*[:：]/.test(lines[0] || "");
+  const name = isMetaFirstLine ? "求职者" : (firstLineParts[0] || "求职者");
   const inferredCity = firstLineParts.find((item) => /北京|上海|广州|深圳|杭州|成都|武汉|南京|苏州|厦门|重庆|郑州|三亚|泉州/.test(item));
   const target = lines.find((line) => line.startsWith("求职目标："))?.replace("求职目标：", "") || firstLineParts.slice(1).join(" / ") || "目标岗位";
   const contactLine = lines.find((line) => line.startsWith("联系方式：")) || "";
   const contactParts = contactLine.replace("联系方式：", "").split(/｜|\|/).map((item) => item.trim()).filter(Boolean);
-  const phone = contactParts.find((item) => /1[3-9]\d{9}/.test(item)) || "";
+  const phone = contactParts.find((item) => /1[3-9]\d[- ]?\d{4}[- ]?\d{4}/.test(item)) || "";
   const email = contactParts.find((item) => /@/.test(item)) || "";
   const age = contactParts.find((item) => /\d+\s*岁/.test(item));
   const contactCity = contactParts.find((item) => /北京|上海|广州|深圳|杭州|成都|武汉|南京|苏州|厦门|重庆|郑州|三亚|泉州|天津|西安|长沙|合肥|宁波|青岛|大连|佛山|东莞|无锡|常州|福州|昆明|南昌|沈阳|济南|哈尔滨|长春|南宁|贵阳|太原|石家庄/.test(item));

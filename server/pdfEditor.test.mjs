@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import PDFDocument from "pdfkit";
 import { PDFDict, PDFDocument as PdfLibDocument, PDFName } from "pdf-lib";
-import { createEditedPdfVersions } from "./pdfEditor.mjs";
+import { createEditedPdfVersions, createGeneratedResumePdf } from "./pdfEditor.mjs";
 import { parseResumeFile } from "./resumeParser.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -218,6 +218,26 @@ test("createEditedPdfVersions generates a readable optimized PDF when no source 
     });
     assert.match(parsed.text.replace(/[\s\x00，。]/g, ""), /独立策划并落地活动执行沉淀现场协同清单/);
     assert.doesNotMatch(parsed.text, /□|�/);
+  } finally {
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
+test("createGeneratedResumePdf keeps labeled names clean and uses printable list markers", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-generated-export-"));
+  try {
+    const result = await createGeneratedResumePdf({
+      text: "姓 名 ： 测试用户\n核心优势\n 完成内容\x00运营与活动策划。",
+      uploadDir
+    });
+    const parsed = await parseResumeFile({
+      buffer: await readFile(join(uploadDir, result.cleanOutputName)),
+      originalname: "generated.pdf",
+      mimetype: "application/pdf"
+    });
+    assert.match(parsed.text, /^测试用户/m);
+    assert.doesNotMatch(parsed.text, /姓\s*名\s*：/);
+    assert.doesNotMatch(parsed.text, /[\x00□�]/);
   } finally {
     await rm(uploadDir, { recursive: true, force: true });
   }

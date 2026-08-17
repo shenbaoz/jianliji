@@ -45,3 +45,16 @@ test("the public header contains only home and resume navigation", async () => {
   assert.doesNotMatch(header, /案例库|onOpenCases/);
   assert.match(header, /开始做简历/);
 });
+
+test("completion exports a generated PDF instead of relying on the browser print dialog", async () => {
+  const [app, editor, pdfService] = await Promise.all([
+    read("src/App.tsx"),
+    read("src/components/EditorView.tsx"),
+    read("src/services/pdfFileEditor.ts")
+  ]);
+
+  assert.match(app, /createGeneratedPdf/);
+  assert.match(pdfService, /\/api\/export-pdf/);
+  assert.doesNotMatch(editor, /window\.print\(\)/);
+  assert.match(editor, /searchParams\.set\("download", "1"\)/);
+});

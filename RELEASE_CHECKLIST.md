@@ -10,9 +10,14 @@
 ## 发布
 
 1. 上传项目到 `/www/wwwroot/resume-fit/`，不要上传本地 `.env` 或任何用户数据。
-2. 运行 `pm2 start ecosystem.config.cjs`；更新版本使用 `pm2 reload resume-fit-api --update-env`。
-3. 将 `deploy/nginx-resume-fit.conf` 的三个 `location` 块加入现有 HTTPS 站点，并按实际目录调整 `alias`。
-4. 必须先运行 `nginx -t`，成功后才能 reload。
+2. 安装 Python 转换依赖（PDF 解析与 Word 导出必需，本机与服务器均需）：
+   ```bash
+   pip install -r requirements-pdf.txt    # PyMuPDF==1.28.0 + pdf2docx==0.5.8
+   ```
+   若 `pdf2docx` 安装失败，`/api/export-word` 的 PDF 源会降级为纯文本 Word 导出（前端自动回退，功能不中断）。
+3. 运行 `pm2 start ecosystem.config.cjs`；更新版本使用 `pm2 reload resume-fit-api --update-env`。
+4. 将 `deploy/nginx-resume-fit.conf` 的三个 `location` 块加入现有 HTTPS 站点，并按实际目录调整 `alias`。
+5. 必须先运行 `nginx -t`，成功后才能 reload。
 
 ## 验收
 
@@ -22,6 +27,14 @@
 - 3102 端口仅监听 `127.0.0.1`，不开放公网。
 - 页面无横向滚动、无控制台错误，不请求用户本机地址。
 - `data/uploads/` 初始为空，数据库使用全新库或已清空的专用库。
+
+## Word 导出服务器验收（2026-08-17）
+
+- [ ] 服务器 Python 可用：`python3 -c "import pymupdf, pdf2docx"` 无报错。
+- [ ] 上传一份含照片的 PDF 简历，走完优化流程后点"下载 Word"，得到保留照片与文字的 `.docx`（用 Word/WPS 打开确认不乱码、有照片）。
+- [ ] 上传一份 DOCX 简历，"下载 Word" 在源文档上替换文字且照片保留。
+- [ ] 上传一份扫描件 PDF（无文字层），"下载 Word" 给出清晰提示而不是产出损坏文件。
+- [ ] 中文简历转换后中文字完整（对照预览检查"姓名/学校/经历"等关键词）。
 
 ## znhil.xyz 手机端一致性验收（2026-08-01）
 

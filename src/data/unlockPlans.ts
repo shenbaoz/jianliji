@@ -21,5 +21,3 @@ export const unlockPlans = [
     features: ["简历成稿", "求职信", "面试话术"]
   }
 ] as const;
-
-export type UnlockPlanId = (typeof unlockPlans)[number]["id"];

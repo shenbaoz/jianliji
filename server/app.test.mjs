@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import JSZip from "jszip";
+import mammoth from "mammoth";
+import PDFDocument from "pdfkit";
 import { createApp } from "./app.mjs";
 
 function createStores() {
@@ -254,6 +258,63 @@ test("uploaded resumes require an unguessable expiring file URL", async () => {
     assert.equal(deleted.status, 204);
     assert.equal((await fetch(`${baseUrl}${payload.originalResumeFileUrl}`)).status, 404);
   } finally {
+    server.closeAllConnections?.();
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
+test("text resumes can be exported as a token-protected PDF without browser printing", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-export-test-"));
+  const { versionStore, interestStore } = createStores();
+  const app = createApp(versionStore, interestStore, null, null, null, { uploadDir });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+  try {
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    const exported = await fetch(`${baseUrl}/api/export-pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Visitor-Id": "export-owner-a1b2c3d4" },
+      body: JSON.stringify({ text: "林晓雨\n核心优势\n- 完成小红书内容运营与短视频制作。" })
+    });
+    assert.equal(exported.status, 201);
+    const payload = await exported.json();
+    assert.match(payload.fileUrl, /^\/api\/resume-files\/[a-f0-9-]+\.pdf\?token=[a-f0-9-]+$/);
+
+    const preview = await fetch(`${baseUrl}${payload.fileUrl}`);
+    assert.equal(preview.status, 200);
+    assert.equal(preview.headers.get("content-type"), "application/pdf");
+    assert.match(preview.headers.get("content-disposition") || "", /^inline;/);
+    assert.match(Buffer.from(await preview.arrayBuffer()).subarray(0, 5).toString("ascii"), /^%PDF-/);
+
+    const download = await fetch(`${baseUrl}${payload.fileUrl}&download=1`);
+    assert.equal(download.status, 200);
+    assert.match(download.headers.get("content-disposition") || "", /^attachment;/);
+  } finally {
+    server.closeAllConnections?.();
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
+test("PDF export rejects anonymous requests before creating a file", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-export-anonymous-test-"));
+  const { versionStore, interestStore } = createStores();
+  const app = createApp(versionStore, interestStore, null, null, null, { uploadDir });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/export-pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "林晓雨\n核心优势\n- 完成内容运营。" })
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await readdir(uploadDir), []);
+  } finally {
+    server.closeAllConnections?.();
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     await rm(uploadDir, { recursive: true, force: true });
   }
@@ -368,6 +429,46 @@ test("AI optimize endpoint removes unresolved contact placeholders from the fina
   }
 });
 
+test("AI optimize endpoint merges user basic info into the final draft", async () => {
+  const { versionStore, interestStore } = createStores();
+  let received;
+  const app = createApp(versionStore, interestStore, null, null, {
+    optimize: async (input) => {
+      received = input;
+      return { provider: "deepseek", model: "deepseek-chat", text: "求职目标：内容运营\n教育经历\n新闻学本科\n技能\n剪映" };
+    }
+  });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/ai/optimize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Visitor-Id": "ai-basicinfo-a1b2c3d4" },
+      body: JSON.stringify({
+        resumeText: "校园公众号运营经历",
+        targetRole: "内容运营",
+        jobDescription: "",
+        basicInfo: { name: "张三", school: "某大学", phone: "13800138000", email: "a@b.com" }
+      })
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(received.basicInfo.name, "张三");
+    assert.equal(received.basicInfo.school, "某大学");
+    // 电话与邮箱不发给 AI，由服务端确定性合并进成稿
+    assert.equal(received.basicInfo.phone, undefined);
+    assert.equal(received.basicInfo.email, undefined);
+    const lines = payload.text.split("\n");
+    assert.equal(lines[0], "姓名：张三");
+    assert.ok(payload.text.includes("联系方式：13800138000｜a@b.com"));
+    assert.ok(payload.text.includes("学校：某大学"));
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+});
+
 test("AI optimize endpoint returns optimization highlights from the provider", async () => {
   const { versionStore, interestStore } = createStores();
   const app = createApp(versionStore, interestStore, null, null, {
@@ -450,5 +551,141 @@ test("AI optimize endpoint rejects oversized resume fields before provider billi
     assert.equal(calls, 0);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+});
+
+const DOCX_PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+
+async function createDocxFixture() {
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`);
+  zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+  zip.file("word/document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p><w:r><w:t>姓名：测试用户</w:t></w:r></w:p>
+    <w:p><w:r><w:t>教育背景</w:t></w:r></w:p>
+    <w:p><w:r><w:t>某大学 新闻学本科</w:t></w:r><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:blipFill><a:blip r:embed="rId99"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+  </w:body>
+</w:document>`);
+  zip.file("word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId99" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>`);
+  zip.file("word/media/image1.png", DOCX_PNG);
+  return zip.generateAsync({ type: "nodebuffer" });
+}
+
+function createPdfBuffer(lines) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    const doc = new PDFDocument();
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.image(DOCX_PNG, 455, 45, { width: 54, height: 54 });
+    lines.forEach((line) => doc.text(line));
+    doc.end();
+  });
+}
+
+async function registerFixture(uploadDir, name, buffer, fileType, mimeType) {
+  const token = randomUUID();
+  await writeFile(join(uploadDir, name), buffer);
+  await writeFile(join(uploadDir, `${name}.meta.json`), JSON.stringify({
+    owner: "word-visitor-a1b2c3d4e5f6",
+    fileType,
+    mimeType,
+    originalName: name,
+    token,
+    expiresAt: new Date(Date.now() + 60_000).toISOString()
+  }), "utf8");
+  return `/api/resume-files/${name}?token=${token}`;
+}
+
+test("export-word turns an uploaded DOCX into an editable docx with replaced text and kept photo", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-export-word-"));
+  const app = createApp(createStores().versionStore, createStores().interestStore, null, null, null, { uploadDir });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+  try {
+    const docxUrl = await registerFixture(uploadDir, "source.docx", await createDocxFixture(), "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/export-word`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Visitor-Id": "word-visitor-a1b2c3d4e5f6" },
+      body: JSON.stringify({ text: "姓名：张三\n教育背景\n某大学 新闻学\n技能\n剪映", docxUrl })
+    });
+    assert.equal(response.status, 201);
+    const payload = await response.json();
+    assert.match(payload.fileUrl, /\/api\/resume-files\/[a-f0-9-]+\.docx\?token=/);
+
+    const fileResponse = await fetch(`http://127.0.0.1:${server.address().port}${payload.fileUrl}`);
+    assert.equal(fileResponse.status, 200);
+    const bytes = Buffer.from(await fileResponse.arrayBuffer());
+    const zip = await JSZip.loadAsync(bytes);
+    assert.ok(zip.file("word/media/image1.png"), "source photo must survive export-word");
+    const text = (await mammoth.extractRawText({ buffer: bytes })).value.replace(/\s+/g, " ").trim();
+    assert.ok(text.includes("姓名：张三"));
+    assert.ok(text.includes("剪映"));
+    assert.ok(!text.includes("测试用户"), "paragraph text must be replaced with the refined lines");
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
+test("export-word converts the refined PDF into an editable docx", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-export-word-pdf-"));
+  const app = createApp(createStores().versionStore, createStores().interestStore, null, null, null, { uploadDir });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+  try {
+    const pdfUrl = await registerFixture(uploadDir, "source.pdf", await createPdfBuffer(["Name: Test User", "Education: Test University", "Managed event operations"]), "pdf", "application/pdf");
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/export-word`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Visitor-Id": "word-visitor-a1b2c3d4e5f6" },
+      body: JSON.stringify({ text: "Name: Test User\nManaged event operations", pdfUrl })
+    });
+    assert.equal(response.status, 201);
+    const payload = await response.json();
+    const fileResponse = await fetch(`http://127.0.0.1:${server.address().port}${payload.fileUrl}`);
+    assert.equal(fileResponse.status, 200);
+    const bytes = Buffer.from(await fileResponse.arrayBuffer());
+    const zip = await JSZip.loadAsync(bytes);
+    assert.ok(Object.keys(zip.files).some((name) => name.startsWith("word/media/")), "converted docx must keep the source image");
+    const text = (await mammoth.extractRawText({ buffer: bytes })).value.replace(/\s+/g, " ").trim();
+    assert.ok(text.includes("Test User"));
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
+test("export-word rejects requests without a resume source file", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-export-word-empty-"));
+  const app = createApp(createStores().versionStore, createStores().interestStore, null, null, null, { uploadDir });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/export-word`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Visitor-Id": "word-visitor-a1b2c3d4e5f6" },
+      body: JSON.stringify({ text: "姓名：张三\n教育背景" })
+    });
+    assert.equal(response.status, 400);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    await rm(uploadDir, { recursive: true, force: true });
   }
 });
