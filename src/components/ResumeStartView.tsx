@@ -42,33 +42,31 @@ export function ResumeStartView({ input, onChange, onGenerate, isGenerating, fol
   }
   if (mode === "create") {
     const canGenerate = direction.trim().length > 1 && facts.trim().length > 10;
-    return <section className="mx-auto max-w-2xl px-5 py-10 sm:py-16">
+    return <section className="start-create-view mx-auto max-w-2xl px-5 py-10 sm:py-16">
       <button type="button" className="start-mode-back mb-8" onClick={() => setMode("choose")}><ArrowLeft size={15} className="mr-1 inline" />换一种方式</button>
-      <p className="text-sm font-semibold text-sky-700">从零生成</p>
+      <p className="start-create-kicker text-sm font-semibold">从零创建</p>
       <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">从经历开始</h1>
       <p className="mt-3 leading-7 text-slate-600">课程、社团、实习和工具都可以写。</p>
       <BasicInfoFields value={basicInfo} onChange={setBasicInfo} />
-      <label className="mt-8 block text-sm font-semibold text-slate-800">求职方向<input className="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 font-normal" value={direction} onChange={(event) => setDirection(event.target.value)} placeholder="例如：内容运营、行政助理、前端开发" /></label>
-      <label className="mt-5 block text-sm font-semibold text-slate-800">你的经历<textarea className="mt-2 min-h-44 w-full rounded-lg border border-slate-300 p-3 font-normal leading-7" value={facts} onChange={(event) => setFacts(event.target.value)} placeholder="例如：在学院新媒体中心负责活动推文排版；组织过迎新活动，现场负责签到和引导；会使用剪映和 Excel。" /></label>
+      <label className="start-create-field mt-8 block text-sm font-semibold">求职方向<input value={direction} onChange={(event) => setDirection(event.target.value)} placeholder="例如：内容运营、行政助理、前端开发" /></label>
+      <label className="start-create-field mt-5 block text-sm font-semibold">你的经历<textarea value={facts} onChange={(event) => setFacts(event.target.value)} placeholder="例如：在学院新媒体中心负责活动推文排版；组织过迎新活动，现场负责签到和引导；会使用剪映和 Excel。" /></label>
       {followUpQuestions.length > 0 && (
-        <div className="mt-6 rounded-xl border border-sky-200 bg-sky-50 p-5">
-          <p className="text-sm font-semibold text-sky-800">为使简历更具体，请回答以下问题（可跳过）：</p>
+        <div className="start-follow-up mt-6">
+          <p className="text-sm font-semibold">为使简历更具体，请回答以下问题（可跳过）：</p>
           {followUpQuestions.map((question, index) => (
-            <label key={index} className="mt-4 block text-sm font-semibold text-slate-800">{question}<textarea className="mt-2 min-h-20 w-full rounded-lg border border-slate-300 p-3 font-normal leading-6" value={answers[index] || ""} onChange={(event) => setAnswers((prev) => { const next = [...prev]; next[index] = event.target.value; return next; })} placeholder="例如：平均阅读量 800+，负责选题与排版" /></label>
+            <label key={index} className="start-create-field mt-4 block text-sm font-semibold">{question}<textarea value={answers[index] || ""} onChange={(event) => setAnswers((prev) => { const next = [...prev]; next[index] = event.target.value; return next; })} placeholder="例如：平均阅读量 800+，负责选题与排版" /></label>
           ))}
-          <button type="button" disabled={isGenerating} onClick={submitWithAnswers} className="mt-5 inline-flex h-12 items-center gap-2 rounded-lg bg-sky-700 px-5 font-semibold text-white disabled:bg-slate-300">{isGenerating ? "生成中…" : "继续生成"}<ArrowRight size={17} /></button>
+          <button type="button" disabled={isGenerating} onClick={submitWithAnswers} className="public-primary-button mt-5 inline-flex items-center gap-2">{isGenerating ? "生成中…" : "继续生成"}<ArrowRight size={17} /></button>
         </div>
       )}
-      <button type="button" disabled={!canGenerate || isGenerating} onClick={() => onGenerate({ candidateName: basicInfo.name, targetRole: direction.trim(), resumeText: facts.trim(), jobDescription: "", sourceMode: "creator", candidateType: "graduate", basicInfo })} className="mt-6 inline-flex h-12 items-center gap-2 rounded-lg bg-slate-950 px-5 font-semibold text-white disabled:bg-slate-300">{isGenerating ? "生成中…" : "生成简历"}<ArrowRight size={17} /></button>
+      <button type="button" disabled={!canGenerate || isGenerating} onClick={() => onGenerate({ candidateName: basicInfo.name, targetRole: direction.trim(), resumeText: facts.trim(), jobDescription: "", sourceMode: "creator", candidateType: "graduate", basicInfo })} className="public-primary-button mt-6 inline-flex items-center gap-2">{isGenerating ? "生成中…" : "生成简历"}<ArrowRight size={17} /></button>
     </section>;
   }
   return <section className="start-choose">
-    <p className="start-choose-kicker">当前免费开放</p>
     <h1 className="start-choose-title">选择开始方式</h1>
-    <p className="start-choose-desc">不需要登录。已有简历可直接整理，也可以从经历开始创建。</p>
     <div className="start-choose-grid">
-      <button type="button" onClick={() => setMode("optimize")} className="start-choose-card start-choose-card-optimize"><strong>已有简历</strong><span>上传文件或粘贴内容后整理。</span></button>
-      <button type="button" onClick={() => setMode("create")} className="start-choose-card start-choose-card-create"><strong>从零创建</strong><span>填写目标方向和真实经历。</span></button>
+      <button type="button" onClick={() => setMode("optimize")} className="start-choose-card start-choose-card-optimize"><strong>已有简历</strong><span>上传文件或粘贴内容后整理。</span><small className="start-choose-card-meta">PDF / DOCX / TXT</small></button>
+      <button type="button" onClick={() => setMode("create")} className="start-choose-card start-choose-card-create"><strong>从零创建</strong><span>填写目标方向和真实经历。</span><small className="start-choose-card-meta">适合还没有完整简历的人</small></button>
     </div>
   </section>;
 }

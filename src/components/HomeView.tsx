@@ -107,7 +107,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
               <p>{resumeLength} 字 · 文件临时保存并定期清理</p>
             </div>
           </header>
-          <div className="workspace-pane-body">
+          <div className="workspace-pane-body upload-stage">
             <label className="field job-direction">
               <span>求职方向 <em>（可选）</em></span>
               <input
@@ -116,7 +116,6 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
                 placeholder="例如：新媒体运营；不填则生成通用版本"
               />
             </label>
-            <BasicInfoFields value={basicInfo} onChange={updateBasicInfo} collapsed />
             <label className="upload-card">
               <input className="sr-only" type="file" accept=".txt,.pdf,.docx" onChange={(event) => handleFile(event.target.files?.[0])} />
               <span className="upload-card-inner">
@@ -127,12 +126,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
                 {fileStatus && <span className="upload-card-status">{fileStatus}</span>}
               </span>
             </label>
-            <textarea
-              className="resume-textarea"
-              value={input.resumeText}
-              onChange={(event) => update("resumeText", event.target.value)}
-              placeholder="也可以直接粘贴简历文字。"
-            />
+            <BasicInfoFields value={basicInfo} onChange={updateBasicInfo} collapsed />
           </div>
         </section>
 
@@ -149,7 +143,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
               {resumeLength > 0 ? (
                 <ResumeDocument text={input.resumeText} template={previewTemplate} candidateName={input.candidateName} />
               ) : (
-                <div className="resume-empty-state">简历内容会在这里以纸张形式预览。</div>
+                <div className="resume-empty-state"><div className="resume-empty-state-skeleton" aria-hidden="true"><i /><i /><i /><i /><i /></div><span>上传后将在这里生成预览</span></div>
               )}
             </div>
           </div>
@@ -166,7 +160,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
 
 function MobileTabButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
   return (
-    <button type="button" aria-current={active ? "page" : undefined} className={active ? "flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs font-semibold text-sky-700" : "flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-xs text-slate-500"} onClick={onClick}>
+    <button type="button" aria-current={active ? "page" : undefined} className={active ? "mobile-view-tab is-active" : "mobile-view-tab"} onClick={onClick}>
       {icon}
       <span>{label}</span>
     </button>

@@ -1,0 +1,46 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+
+test("public start flow exposes the redesigned entry points", async () => {
+  const source = await read("src/components/ResumeStartView.tsx");
+  assert.match(source, /start-choose-card-meta/);
+  assert.doesNotMatch(source, /不需要登录|当前免费开放|约 1 分钟/);
+});
+
+test("public entry surfaces keep the interface focused on file-first actions", async () => {
+  const landing = await read("src/components/LandingView.tsx");
+  const footer = await read("src/components/Footer.tsx");
+  assert.doesNotMatch(landing, /不需要登录|当前免费开放|约 1 分钟/);
+  assert.doesNotMatch(footer, /当前免费开放/);
+});
+
+test("export feedback shows the owner's WeChat contact", async () => {
+  const editor = await read("src/components/EditorView.tsx");
+  assert.match(editor, /微信/);
+  assert.match(editor, /18142560091/);
+});
+
+test("file import is the only resume input and job direction comes first", async () => {
+  const source = await read("src/components/HomeView.tsx");
+  const styles = await read("src/styles.css");
+  assert.doesNotMatch(source, /直接粘贴文字|resume-textarea/);
+  assert.match(styles, /\.public-editorial-shell \.job-direction\s*\{[^}]*order:\s*0/);
+  assert.match(styles, /\.public-editorial-shell \.upload-card\s*\{[^}]*order:\s*1/);
+});
+
+test("public upload flow keeps the primary action and preview empty state", async () => {
+  const source = await read("src/components/HomeView.tsx");
+  assert.match(source, /upload-stage/);
+  assert.match(source, /resume-empty-state-skeleton/);
+  assert.match(source, /mobile-view-tabs/);
+});
+
+test("public styling defines the unified monochrome action system", async () => {
+  const source = await read("src/styles.css");
+  assert.match(source, /--accent: #202022/);
+  assert.match(source, /\.public-primary-button/);
+  assert.match(source, /\.start-choose-card-meta/);
+});

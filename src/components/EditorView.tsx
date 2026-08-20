@@ -103,7 +103,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
   };
 
   return (
-    <section className="min-h-[calc(100vh-56px)] bg-slate-50 px-4 py-5 text-slate-950 sm:px-6">
+    <section className="editor-shell min-h-[calc(100vh-56px)] px-4 py-5 text-slate-950 sm:px-6">
       <div className="mx-auto max-w-[1100px]">
         <div className="mb-5 border-b border-slate-200 pb-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -128,8 +128,8 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
         </div>
         <OptimizationHighlightsCard highlights={currentVersion?.highlights} />
         <ChangeCompareCard changes={resumeChanges} />
-        <div className="border border-slate-200 bg-[#e9ece8] p-4 sm:p-8">
-            <div className="mb-4 flex items-center justify-between"><span className="text-sm font-medium text-slate-800">可投递成稿</span><span className="text-xs text-slate-500">已完成</span></div>
+        <div className="editor-document-panel border border-slate-200 p-4 sm:p-8">
+            <div className="mb-4 flex items-center justify-between"><span className="text-sm font-medium text-slate-800">可投递成稿</span><span className="editor-complete-label text-xs">已完成</span></div>
             <div className="editor-preview-viewport mx-auto w-full max-w-[900px] overflow-auto custom-scrollbar">
               <div className="resume-print-area mx-auto w-[210mm] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.12)] outline-none focus:ring-2 focus:ring-sky-500" spellCheck={false} aria-label="整理后的简历">
                 <ResumeDocument text={generatedResumeText} template={template} portraitDataUrl={preparedPdf?.portraitDataUrl} candidateName={currentVersion?.candidateName} />
@@ -233,6 +233,7 @@ function ExportGateDialog({ onCancel, onUnlock, error }: { onCancel: () => void;
         <p className="export-gate-kicker">当前免费</p>
         <h2>想听你的判断</h2>
         <p className="export-gate-note">如果这份简历收费，你愿意付多少？</p>
+        <p className="export-gate-contact">微信：<strong>18142560091</strong><button type="button" onClick={() => void navigator.clipboard?.writeText("18142560091")} aria-label="复制微信号">复制</button></p>
         <div className="export-gate-actions export-gate-price-options" role="radiogroup" aria-label="付费意愿">
           {[
             ["not-willing", "不愿意付费"],
