@@ -60,3 +60,8 @@ test("export feedback dialog is compact and centered without a white card", asyn
   assert.match(source, /\.public-editorial-shell \.export-gate-card\s*\{[^}]*background:\s*#fff/);
   assert.match(source, /\.public-editorial-shell \.export-gate-card\s*\{[^}]*width:\s*min\(360px/);
 });
+
+test("PDF import preview does not eagerly duplicate the whole file as a data URL", async () => {
+  const source = await read("src/services/resumeOriginalPreview.ts");
+  assert.match(source, /if \(\/\\\.pdf\$\/i\.test\(file\.name\)\) \{[\s\S]*?fileUrl: URL\.createObjectURL\(file\)[\s\S]*?\}\s*\n\s*const dataUrl = await fileToDataUrl\(file\);/);
+});

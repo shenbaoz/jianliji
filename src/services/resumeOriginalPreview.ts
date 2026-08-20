@@ -15,6 +15,15 @@ const escapeHtml = (value: string) =>
 
 export async function createOriginalResumePreview(file: File): Promise<OriginalResumePreview> {
   const mimeType = file.type || inferMimeType(file.name);
+
+  if (/\.pdf$/i.test(file.name)) {
+    return {
+      fileUrl: URL.createObjectURL(file),
+      fileName: file.name,
+      mimeType
+    };
+  }
+
   const dataUrl = await fileToDataUrl(file);
 
   if (/\.docx$/i.test(file.name)) {
@@ -33,15 +42,6 @@ export async function createOriginalResumePreview(file: File): Promise<OriginalR
     return {
       html: `<pre class="original-resume-text">${escapeHtml(text)}</pre>`,
       dataUrl,
-      fileName: file.name,
-      mimeType
-    };
-  }
-
-  if (/\.pdf$/i.test(file.name)) {
-    return {
-      dataUrl,
-      fileUrl: URL.createObjectURL(file),
       fileName: file.name,
       mimeType
     };
