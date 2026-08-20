@@ -83,7 +83,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
     <PageShell
       active="workspace"
       title="导入简历"
-      description="上传文件或粘贴文字。系统会识别内容并生成可编辑版本。"
+      description="上传文件后，系统会识别内容并生成可编辑版本。"
       actions={
         <div className="flex gap-2">
           {resumeLength > 0 && (

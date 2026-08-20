@@ -34,8 +34,10 @@ test("final resume is read-only with PDF as the primary export", async () => {
 
 test("file import is the only resume input and job direction comes first", async () => {
   const source = await read("src/components/HomeView.tsx");
+  const start = await read("src/components/ResumeStartView.tsx");
+  const landing = await read("src/components/LandingView.tsx");
   const styles = await read("src/styles.css");
-  assert.doesNotMatch(source, /直接粘贴文字|resume-textarea/);
+  assert.doesNotMatch(`${source}\n${start}\n${landing}`, /粘贴内容|粘贴文字|或文字|resume-textarea/);
   assert.match(styles, /\.public-editorial-shell \.job-direction\s*\{[^}]*order:\s*0/);
   assert.match(styles, /\.public-editorial-shell \.upload-card\s*\{[^}]*order:\s*1/);
 });
