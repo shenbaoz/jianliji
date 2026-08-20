@@ -53,3 +53,10 @@ test("public styling defines the unified monochrome action system", async () => 
   assert.match(source, /\.public-primary-button/);
   assert.match(source, /\.start-choose-card-meta/);
 });
+
+test("export feedback dialog is compact and centered without a white card", async () => {
+  const source = await read("src/styles.css");
+  assert.match(source, /\.public-editorial-shell \.export-gate-overlay\s*\{[^}]*place-items:\s*center/);
+  assert.match(source, /\.public-editorial-shell \.export-gate-card\s*\{[^}]*background:\s*#fff/);
+  assert.match(source, /\.public-editorial-shell \.export-gate-card\s*\{[^}]*width:\s*min\(360px/);
+});
