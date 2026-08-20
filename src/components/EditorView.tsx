@@ -122,9 +122,6 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
               </button>
             </div>
           </div>
-          <p className={canPublish ? "mt-4 text-xs font-medium text-emerald-700" : "mt-4 text-xs font-medium text-amber-700"}>
-            {exportMessage || (canPublish ? "已生成成稿。" : "生成中…")}
-          </p>
         </div>
         <OptimizationHighlightsCard highlights={currentVersion?.highlights} />
         <ChangeCompareCard changes={resumeChanges} />

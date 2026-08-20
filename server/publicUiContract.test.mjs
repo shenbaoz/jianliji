@@ -29,6 +29,7 @@ test("final resume is read-only with PDF as the primary export", async () => {
   assert.match(editor, /下载 PDF/);
   assert.doesNotMatch(editor, /可继续编辑|打印 \/ 保存 PDF|contentEditable/);
   assert.match(editor, /className="editor-primary-export\b/);
+  assert.doesNotMatch(editor, /已生成成稿|className=\{canPublish/);
 });
 
 test("file import is the only resume input and job direction comes first", async () => {
