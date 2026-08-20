@@ -69,9 +69,9 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
       return;
     }
     if (preparedPdf?.fileUrl) {
-      if (isWeChatBrowser()) {
-        window.location.assign(preparedPdf.fileUrl);
-        setExportMessage("已打开 PDF 预览，请使用右上角菜单保存或转发。");
+      if (isMobileDownloadBrowser()) {
+        window.location.assign(withDownloadFlag(preparedPdf.fileUrl));
+        setExportMessage("正在下载 PDF；如果打开了预览，请使用浏览器菜单保存。");
         return;
       }
       const link = document.createElement("a");
@@ -165,6 +165,10 @@ function withDownloadFlag(fileUrl: string) {
 
 function isWeChatBrowser() {
   return /MicroMessenger|wxwork/i.test(navigator.userAgent);
+}
+
+function isMobileDownloadBrowser() {
+  return isWeChatBrowser() || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 function OptimizationHighlightsCard({ highlights }: { highlights?: string[] }) {

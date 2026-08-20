@@ -65,3 +65,8 @@ test("PDF import preview does not eagerly duplicate the whole file as a data URL
   const source = await read("src/services/resumeOriginalPreview.ts");
   assert.match(source, /if \(\/\\\.pdf\$\/i\.test\(file\.name\)\) \{[\s\S]*?fileUrl: URL\.createObjectURL\(file\)[\s\S]*?\}\s*\n\s*const dataUrl = await fileToDataUrl\(file\);/);
 });
+
+test("PDF export uses the attachment URL in the WeChat/mobile-safe path", async () => {
+  const source = await read("src/components/EditorView.tsx");
+  assert.match(source, /window\.location\.assign\(withDownloadFlag\(preparedPdf\.fileUrl\)\)/);
+});
