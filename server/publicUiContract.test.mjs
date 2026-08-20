@@ -23,6 +23,14 @@ test("export feedback shows the owner's WeChat contact", async () => {
   assert.match(editor, /18142560091/);
 });
 
+test("final resume is read-only with PDF as the primary export", async () => {
+  const editor = await read("src/components/EditorView.tsx");
+  assert.match(editor, /成稿已整理完成/);
+  assert.match(editor, /下载 PDF/);
+  assert.doesNotMatch(editor, /可继续编辑|打印 \/ 保存 PDF|contentEditable/);
+  assert.match(editor, /className="editor-primary-export\b/);
+});
+
 test("file import is the only resume input and job direction comes first", async () => {
   const source = await read("src/components/HomeView.tsx");
   const styles = await read("src/styles.css");

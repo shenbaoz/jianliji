@@ -95,7 +95,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
             ? { docxUrl: currentVersion.originalResumeFileUrl }
             : undefined);
       void downloadResumeWord(generatedResumeText, "优化后简历.docx", source).then((usedOriginalLayout) => {
-        setExportMessage(usedOriginalLayout ? "已保留原版式与照片，可下载编辑。" : "已下载 Word，可继续编辑。");
+        setExportMessage(usedOriginalLayout ? "已保留原版式与照片。" : "已下载 Word。");
       });
     } catch {
       setExportMessage("Word 导出失败，请刷新页面后重试。");
@@ -109,21 +109,21 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">成稿</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">可继续编辑，或直接导出。</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">成稿已整理完成，可直接下载。</p>
             </div>
             <div className="editor-header-actions flex flex-wrap gap-2">
-              <button type="button" onClick={() => requestExport(handleDownloadWord)} className="inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33]">
+              <button type="button" onClick={() => requestExport(handleDownloadPdf)} disabled={!canPublish} className="editor-primary-export inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33] disabled:cursor-not-allowed disabled:bg-slate-400">
+                <FileText size={14} />
+                下载 PDF
+              </button>
+              <button type="button" onClick={() => requestExport(handleDownloadWord)} className="inline-flex h-10 items-center gap-2 rounded-sm border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50">
                 <Download size={14} />
                 下载 Word
-              </button>
-              <button type="button" onClick={() => requestExport(handleDownloadPdf)} disabled={!canPublish} className="inline-flex h-10 items-center gap-2 rounded-sm border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
-                <FileText size={14} />
-                打印 / 保存 PDF
               </button>
             </div>
           </div>
           <p className={canPublish ? "mt-4 text-xs font-medium text-emerald-700" : "mt-4 text-xs font-medium text-amber-700"}>
-            {exportMessage || (canPublish ? "已生成可编辑版本。" : "生成中…")}
+            {exportMessage || (canPublish ? "已生成成稿。" : "生成中…")}
           </p>
         </div>
         <OptimizationHighlightsCard highlights={currentVersion?.highlights} />
