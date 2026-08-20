@@ -4,7 +4,10 @@ import { ResumeDocument } from "./ResumeDocument";
 import { getVisibleResumeTemplates } from "../services/templates";
 import { buildResumeChangeSet } from "../services/changeExamples";
 import { downloadResumeWord } from "../services/wordExporter";
+import { saveExportFeedback } from "../services/storage";
 import type { SavedResumeVersion } from "../types";
+
+const EXPORT_UNLOCK_KEY = "jianliji_export_unlocked";
 
 interface EditorViewProps {
   currentVersion?: SavedResumeVersion;
@@ -12,7 +15,42 @@ interface EditorViewProps {
 
 export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
   const [exportMessage, setExportMessage] = useState("");
-  const resumeExperience = currentVersion?.experience || "暂无成稿内容。请先放入简历、填写目标岗位并补充真实证据。";
+  const [feedbackError, setFeedbackError] = useState("");
+  const [exportUnlocked, setExportUnlocked] = useState(() => {
+    try { return localStorage.getItem(EXPORT_UNLOCK_KEY) === "1"; } catch { return false; }
+  });
+  const [gateAction, setGateAction] = useState<null | (() => void)>(null);
+
+  const requestExport = (action: () => void) => {
+    if (exportUnlocked) {
+      action();
+      return;
+    }
+    setGateAction(() => action);
+  };
+
+  const confirmUnlock = async (priceChoice: string, note: string) => {
+    if (!priceChoice) return;
+    setFeedbackError("");
+    try {
+      await saveExportFeedback({
+        candidateName: currentVersion?.candidateName || "未命名用户",
+        targetRole: currentVersion?.targetRole || "通用简历",
+        planId: `feedback-${priceChoice}`,
+        note
+      });
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : "反馈提交失败，请稍后重试。");
+      return;
+    }
+    try { localStorage.setItem(EXPORT_UNLOCK_KEY, "1"); } catch { /* noop */ }
+    setExportUnlocked(true);
+    const pending = gateAction;
+    setGateAction(null);
+    pending?.();
+  };
+
+  const resumeExperience = currentVersion?.experience || "暂无成稿。请导入简历、填写目标岗位并补充真实证据。";
   const sourceResume = currentVersion?.resumeText || "";
   const originalResumeMimeType = currentVersion?.originalResumeMimeType || "";
   const isPdfResume = /pdf/i.test(originalResumeMimeType);
@@ -27,7 +65,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
 
   const handleDownloadPdf = () => {
     if (!canPublish) {
-      setExportMessage("成品简历正在准备，请稍候。");
+      setExportMessage("成稿准备中，请稍候。");
       return;
     }
     if (preparedPdf?.fileUrl) {
@@ -42,10 +80,10 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      setExportMessage("已下载无红线的成品 PDF。");
+      setExportMessage("已下载 PDF。");
       return;
     }
-    setExportMessage("成品 PDF 正在准备，请稍候。");
+    setExportMessage("成品 PDF 准备中，请稍候。");
   };
 
   const handleDownloadWord = () => {
@@ -57,7 +95,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
             ? { docxUrl: currentVersion.originalResumeFileUrl }
             : undefined);
       void downloadResumeWord(generatedResumeText, "优化后简历.docx", source).then((usedOriginalLayout) => {
-        setExportMessage(usedOriginalLayout ? "已生成保留原版式与照片的 Word 文档，可下载后继续编辑。" : "已下载 Word 文档，可用 Word 或 WPS 打开继续编辑。");
+        setExportMessage(usedOriginalLayout ? "已保留原版式与照片，可下载编辑。" : "已下载 Word，可继续编辑。");
       });
     } catch {
       setExportMessage("Word 导出失败，请刷新页面后重试。");
@@ -70,22 +108,22 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
         <div className="mb-5 border-b border-slate-200 pb-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">成品简历</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">已按专业求职结构整理，重点突出真实经历与成果。</p>
+              <h1 className="text-2xl font-semibold tracking-tight">成稿</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-500">可继续编辑，或直接导出。</p>
             </div>
             <div className="editor-header-actions flex flex-wrap gap-2">
-              <button type="button" onClick={handleDownloadWord} className="inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33]">
+              <button type="button" onClick={() => requestExport(handleDownloadWord)} className="inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33]">
                 <Download size={14} />
                 下载 Word
               </button>
-              <button type="button" onClick={handleDownloadPdf} disabled={!canPublish} className="inline-flex h-10 items-center gap-2 rounded-sm border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+              <button type="button" onClick={() => requestExport(handleDownloadPdf)} disabled={!canPublish} className="inline-flex h-10 items-center gap-2 rounded-sm border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
                 <FileText size={14} />
                 打印 / 保存 PDF
               </button>
             </div>
           </div>
           <p className={canPublish ? "mt-4 text-xs font-medium text-emerald-700" : "mt-4 text-xs font-medium text-amber-700"}>
-            {exportMessage || (canPublish ? "成品简历已生成，可下载 Word 继续编辑，或导出无红线 PDF。" : "正在生成成品简历...")}
+            {exportMessage || (canPublish ? "已生成可编辑版本。" : "生成中…")}
           </p>
         </div>
         <OptimizationHighlightsCard highlights={currentVersion?.highlights} />
@@ -94,11 +132,18 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
             <div className="mb-4 flex items-center justify-between"><span className="text-sm font-medium text-slate-800">可投递成稿</span><span className="text-xs text-slate-500">已完成</span></div>
             <div className="editor-preview-viewport mx-auto w-full max-w-[900px] overflow-auto custom-scrollbar">
               <div className="resume-print-area mx-auto w-[210mm] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.12)] outline-none focus:ring-2 focus:ring-sky-500" spellCheck={false} aria-label="整理后的简历">
-                <ResumeDocument text={generatedResumeText} template={template} portraitDataUrl={preparedPdf?.portraitDataUrl} />
+                <ResumeDocument text={generatedResumeText} template={template} portraitDataUrl={preparedPdf?.portraitDataUrl} candidateName={currentVersion?.candidateName} />
               </div>
             </div>
         </div>
       </div>
+      {gateAction && (
+        <ExportGateDialog
+          onCancel={() => setGateAction(null)}
+          onUnlock={confirmUnlock}
+          error={feedbackError}
+        />
+      )}
     </section>
   );
 };
@@ -174,6 +219,35 @@ function ChangeCompareCard({ changes }: { changes: Array<{ before: string; after
             <p className="text-xs font-medium leading-5 text-[#1a3c34]">{change.after}</p>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ExportGateDialog({ onCancel, onUnlock, error }: { onCancel: () => void; onUnlock: (priceChoice: string, note: string) => void; error: string }) {
+  const [priceChoice, setPriceChoice] = useState("");
+  const [note, setNote] = useState("");
+  return (
+    <div className="export-gate-overlay" role="dialog" aria-modal="true" aria-label="导出前反馈引导">
+      <div className="export-gate-card">
+        <p className="export-gate-kicker">当前免费</p>
+        <h2>想听你的判断</h2>
+        <p className="export-gate-note">如果这份简历收费，你愿意付多少？</p>
+        <div className="export-gate-actions export-gate-price-options" role="radiogroup" aria-label="付费意愿">
+          {[
+            ["not-willing", "不愿意付费"],
+            ["9-9", "9.9 元"],
+            ["19-9-plus", "19.9 元及以上"]
+          ].map(([value, label]) => (
+            <button key={value} type="button" role="radio" aria-checked={priceChoice === value} className={priceChoice === value ? "export-gate-copy is-selected" : "export-gate-copy"} onClick={() => setPriceChoice(value)}>{label}</button>
+          ))}
+        </div>
+        <label className="export-gate-feedback-label">哪里让你觉得值，或不值？<span>可不填</span><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="写一句就行" /></label>
+        {error && <p className="export-gate-error" role="alert">{error}</p>}
+        <button type="button" className="export-gate-confirm" disabled={!priceChoice} onClick={() => onUnlock(priceChoice, note)}>提交并免费下载</button>
+        <button type="button" className="export-gate-skip" onClick={onCancel}>
+          暂不导出
+        </button>
       </div>
     </div>
   );

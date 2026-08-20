@@ -39,8 +39,8 @@ export class ErrorBoundary extends Component<Props, State> {
         this.props.fallback || (
           <section className="flex min-h-screen items-center justify-center bg-[#fafafa] px-6">
             <div className="rounded-2xl border border-slate-200/80 bg-white p-10 text-center shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-950">这一页暂时没打开</h1>
-              <p className="mt-3 text-sm text-slate-500">先回到首页，再继续处理你的简历。</p>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-950">页面暂时无法打开</h1>
+              <p className="mt-3 text-sm text-slate-500">请返回首页继续。</p>
               <button
                 type="button"
                 className="mt-6 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-medium text-white hover:bg-slate-800"

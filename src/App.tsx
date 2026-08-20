@@ -1,5 +1,6 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { LandingView } from "./components/LandingView";
 import { optimizeWithDeepSeek } from "./services/aiOptimize";
@@ -33,7 +34,7 @@ export default function App() {
   };
   const refine = async (nextInput: ResumeInput, evidenceAnswers: string[] = []) => {
     if (inFlight.current || nextInput.resumeText.trim().length < 11) {
-      setMessage(nextInput.sourceMode === "creator" ? "请先写下你做过的一件具体事情。" : "请先导入一份可读取的简历。");
+      setMessage(nextInput.sourceMode === "creator" ? "请先写下一件你做过的事。" : "请先导入可读取的简历。");
       return;
     }
     inFlight.current = true;
@@ -52,7 +53,7 @@ export default function App() {
           setFollowUpRounds((rounds) => rounds + 1);
           return;
         }
-        throw new Error(refined.reviewFlags?.[0] || questions[0] || "信息较少，请补充一件你具体做过的事后再试。");
+        throw new Error(refined.reviewFlags?.[0] || questions[0] || "信息不足，请补充具体经历。");
       }
       const preparedPdf = normalized.originalResumeFileUrl && /pdf/i.test(normalized.originalResumeMimeType || "")
         ? await createEditedPdfPreview(normalized.originalResumeFileUrl, refined.text, refined.changes || [])
@@ -83,15 +84,16 @@ export default function App() {
     <Header onOpenHome={() => go("home")} onOpenWorkspace={() => go("workspace")} finalOnly={view === "editor"} />
     {message && <div className="app-toast" role="status">{message}</div>}
     {isRefining && <RefiningOverlay />}
-    <main><ErrorBoundary><Suspense fallback={<div className="page-shell">正在打开…</div>}>
+    <main><ErrorBoundary><Suspense fallback={<div className="page-shell">加载…</div>}>
       {view === "home" && <LandingView onNavigate={go} />}
       {view === "workspace" && <ResumeStartView input={input} onChange={updateInput} onGenerate={refine} isGenerating={isRefining} followUpQuestions={followUpQuestions} />}
       {view === "editor" && version && <EditorView currentVersion={version} />}
       {view === "editor" && !version && <ResumeStartView input={input} onChange={updateInput} onGenerate={refine} isGenerating={isRefining} followUpQuestions={followUpQuestions} />}
     </Suspense></ErrorBoundary></main>
+    <Footer />
   </div>;
 }
 
 function RefiningOverlay() {
-  return <div className="refining-overlay" role="status" aria-live="polite" aria-busy="true"><div className="refining-card"><div className="refining-spinner" /><p className="refining-kicker">正在整理</p><h2>正在整理你的简历</h2><p className="refining-note">请不要关闭页面，完成后会自动进入成稿页。</p></div></div>;
+  return <div className="refining-overlay" role="status" aria-live="polite" aria-busy="true"><div className="refining-card"><div className="refining-spinner" /><p className="refining-kicker">整理中</p><h2>正在生成简历</h2><p className="refining-note">完成后自动进入成稿页。</p></div></div>;
 }

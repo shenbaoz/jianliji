@@ -85,6 +85,15 @@ export async function deleteUnlockInterest(id: string) {
   if (!response.ok) throw new Error("删除解锁意向失败，请稍后重试。");
 }
 
+export async function saveExportFeedback(input: Pick<UnlockInterest, "candidateName" | "targetRole" | "planId" | "note">) {
+  const response = await fetch(`${apiBase}/api/interest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getVisitorHeaders() },
+    body: JSON.stringify({ source: "editor", contact: "", ...input })
+  });
+  if (!response.ok) throw new Error("反馈提交失败，请稍后重试。");
+}
+
 export async function hasAdminSession() {
   const response = await fetch(`${apiBase}/api/admin/session`, { credentials: "include" });
   return response.status === 204;

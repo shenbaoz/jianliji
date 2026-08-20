@@ -589,11 +589,26 @@ def create_generated_resume_pdf(payload, portrait=None):
     margin = 46
     y = 50
     lines = [line.strip() for line in text.splitlines() if line.strip()]
+    # 1) 优先从全文任意一行找"姓名：XXX"（不只是第一行），避免用户把姓名写在中间导致错取
+    labeled_name = None
+    for line in lines:
+        m = re.match(r"^姓\s*名\s*[:：]\s*(.+)$", line)
+        if m:
+            labeled_name = m
+            break
     first_line = lines[0] if lines else ""
-    labeled_name = re.match(r"^姓\s*名\s*[:：]\s*(.+)$", first_line)
-    is_meta_line = bool(re.match(r"^(?:求职目标|求职意向|联系方式)\s*[:：]", first_line))
-    has_header_name = bool(first_line and not is_meta_line and (labeled_name or len(normalize(first_line)) <= 20))
-    name = labeled_name.group(1).strip() if labeled_name else (first_line if has_header_name else "求职者")
+    # "姓名：" 也属于元信息行，不应当成 standalone 姓名行
+    is_meta_line = bool(re.match(r"^(?:求职目标|求职意向|目标岗位|联系方式|姓\s*名)\s*[:：]", first_line))
+    # 姓名优先级：labeled_name(全文任意行"姓名：XXX") > 首行非元信息时的首段 > "求职者"
+    if labeled_name:
+        name = labeled_name.group(1).strip()
+        has_header_name = True
+    elif not is_meta_line and first_line:
+        name = first_line
+        has_header_name = len(normalize(first_line)) <= 20
+    else:
+        name = "求职者"
+        has_header_name = False
     page.insert_text((margin, y), name, fontname=font_name, fontsize=21, color=(0.08, 0.20, 0.18))
     if portrait:
         page.insert_image(pymupdf.Rect(478, 38, 537, 112), stream=portrait["bytes"], keep_proportion=True)
@@ -601,7 +616,25 @@ def create_generated_resume_pdf(payload, portrait=None):
     page.draw_line((margin, y), (549, y), color=(0.08, 0.28, 0.24), width=1.5)
     y += 22
 
-    body_lines = lines[1:] if has_header_name else lines
+    # 过滤掉个人信息相关行，避免混入section：
+    #   (1) 所有"字段名：值"格式（政治面貌、性别、民族、籍贯、出生年月、电子邮箱、电话、学历、专业等）
+    #   (2) PDF两列布局导致的跨行拆分单字行：性、别、籍、贯、姓、名、学、专、电、邮、院、校
+    #   (3) 求职目标/求职意向/目标岗位/联系方式/姓名 等元信息行
+    _PERSONAL_FIELD_LINE_RE = re.compile(
+        r"^(?:姓\s*名|名|性\s*别|别|政治面貌|政治\s*面貌|籍\s*贯|贯|出生年月|出生日期|出生|年龄|婚否|婚姻状况|身高|体重|血型|户口|身份证|住址|通讯地址|地址|邮编|邮政编码|国籍|民族|电话|手机|联系方式|电子邮箱|邮箱|电\s*邮|E[- ]?mail|电子邮件|求职意向|求职目标|目标岗位|期望职位|期望工作|期望地点|期望城市|期望薪资|薪资要求|可到岗时间|入职时间|毕业时间|毕业年份|毕业院校|学\s*历|专\s*业|学位|学院|系别|研究方向|导师|学制|学号|院\s*校)\s*[:：]"
+    )
+    _PERSONAL_SINGLE_CHAR_RE = re.compile(r"^(?:性|别|籍|贯|姓|名|学|专|电|邮|院|校)$")
+    def _is_personal_info_line(ln):
+        t = (ln or "").strip()
+        if not t:
+            return True
+        if _PERSONAL_FIELD_LINE_RE.match(t):
+            return True
+        if len(t) <= 3 and _PERSONAL_SINGLE_CHAR_RE.match(t):
+            return True
+        return False
+    body_lines_all = lines[1:] if has_header_name else lines
+    body_lines = [ln for ln in body_lines_all if not _is_personal_info_line(ln)]
     for original_line in body_lines:
         heading = normalize(original_line) in {"核心优势", "教育背景", "实习经历", "工作经历", "项目经历", "校园经历", "技能", "技能特长", "专业技能", "荣誉", "证书"}
         wrapped = generated_lines(original_line, 46)

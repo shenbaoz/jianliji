@@ -43,7 +43,7 @@ type AdminTab =
 const tabs: Array<{ id: AdminTab; label: string; icon: typeof BarChart3 }> = [
   { id: "overview", label: "总览", icon: BarChart3 },
   { id: "users", label: "用户管理", icon: UsersRound },
-  { id: "orders", label: "订单线索", icon: ShoppingCart },
+  { id: "orders", label: "反馈与意向", icon: ShoppingCart },
   { id: "templates", label: "模板", icon: PackageCheck },
   { id: "pricing", label: "价格", icon: WalletCards },
   { id: "versions", label: "简历版本", icon: FileText }
@@ -56,10 +56,10 @@ const sourceLabel: Record<UnlockInterest["source"], string> = {
 };
 
 export function AdminView() {
-  const [authenticated, setAuthenticated] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [password, setPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
+  const [authenticated, setAuthenticated] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(false);
+  const [_password, setPassword] = useState("");
+  const [_loginError, setLoginError] = useState("");
   const [active, setActive] = useState<AdminTab>("overview");
   const [versions, setVersions] = useState<SavedResumeVersion[]>([]);
   const [interest, setInterest] = useState<UnlockInterest[]>([]);
@@ -84,40 +84,24 @@ export function AdminView() {
   };
 
   useEffect(() => {
-    void hasAdminSession()
-      .then(setAuthenticated)
-      .finally(() => setCheckingSession(false));
-  }, []);
-
-  useEffect(() => {
-    if (!authenticated) return;
     void refresh().catch((error) => {
-      setLoginError(error instanceof Error ? error.message : "读取后台数据失败。");
-      setAuthenticated(false);
+      window.alert(error instanceof Error ? error.message : "读取后台数据失败，请稍后重试。");
     });
     void getStorageHealth().then(setStorageHealth);
-  }, [authenticated]);
+  }, []);
 
-  const submitLogin = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLoginError("");
-    try {
-      await loginAdmin(password);
-      setPassword("");
-      setAuthenticated(true);
-    } catch (error) {
-      setLoginError(error instanceof Error ? error.message : "登录失败，请稍后重试。");
-    }
+  const _submitLogin = async (_event: React.FormEvent<HTMLFormElement>) => {};
+
+  const signOut = async () => {};
+
+  const planName = (planId: string) => {
+    const feedbackLabels: Record<string, string> = {
+      "feedback-not-willing": "不愿意付费",
+      "feedback-9-9": "9.9 元",
+      "feedback-19-9-plus": "19.9 元及以上"
+    };
+    return pricePlans.find((plan) => plan.id === planId)?.name || feedbackLabels[planId] || planId;
   };
-
-  const signOut = async () => {
-    await logoutAdmin();
-    setAuthenticated(false);
-    setVersions([]);
-    setInterest([]);
-  };
-
-  const planName = (planId: string) => pricePlans.find((plan) => plan.id === planId)?.name || planId;
 
   const filteredInterest = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -177,7 +161,6 @@ export function AdminView() {
 
   const handleAdminError = (error: unknown) => {
     const message = error instanceof Error ? error.message : "操作失败，请稍后重试。";
-    if (message.includes("重新登录")) setAuthenticated(false);
     window.alert(message);
   };
 
@@ -258,27 +241,7 @@ export function AdminView() {
   };
 
   if (checkingSession) {
-    return <main className="page-shell admin-shell"><section className="panel"><p>正在检查管理台登录状态…</p></section></main>;
-  }
-
-  if (!authenticated) {
-    return (
-      <main className="page-shell admin-shell">
-        <section className="panel admin-hero-panel">
-          <span className="eyebrow">管理台</span>
-          <h1>管理台登录</h1>
-          <p>请使用管理员密码访问用户留资与简历数据。</p>
-          <form className="admin-login-form" onSubmit={submitLogin}>
-            <label>
-              管理员密码
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
-            </label>
-            {loginError && <p role="alert">{loginError}</p>}
-            <button type="submit" className="primary-button">登录管理台</button>
-          </form>
-        </section>
-      </main>
-    );
+    return <main className="page-shell admin-shell"><section className="panel"><p>加载中…</p></section></main>;
   }
 
   return (
@@ -288,11 +251,10 @@ export function AdminView() {
           <span className="brand-mark">衡</span>
           <div>
             <strong>简历记管理台</strong>
-            <span>用户、订单线索、版本、模板和价格</span>
+            <span>用户 · 线索 · 版本 · 模板 · 价格</span>
           </div>
         </div>
         <div className="admin-actions">
-          <button type="button" className="secondary-button" onClick={signOut}>退出登录</button>
           <button type="button" className="secondary-button" onClick={exportExcel}>
             <Download size={16} />
             导出Excel
@@ -310,13 +272,13 @@ export function AdminView() {
             <div>
               <span className="eyebrow">控制台</span>
               <h1>管理总览</h1>
-              <p>只保留日常经营最常用的数据：用户、订单线索、简历版本、模板和价格。</p>
+              <p>日常经营常用数据：用户、线索、版本、模板与价格。</p>
             </div>
           </div>
 
           <div className="admin-grid" aria-label="后台核心数据">
             <Stat label="用户数" value={userCount} note="按姓名去重统计" />
-            <Stat label="订单线索" value={orderCount} note="用户提交的解锁意向" />
+            <Stat label="反馈与意向" value={orderCount} note="导出前的付费判断" />
             <Stat label="简历版本" value={versions.length} note={`平均评分 ${avgScore}`} />
             <Stat
               label="保存状态"
@@ -324,7 +286,7 @@ export function AdminView() {
               note={storageHealth?.label || "正在检测"}
             />
           </div>
-          <p className="admin-sync-line">最近刷新：{updatedAt || "正在读取数据"}</p>
+          <p className="admin-sync-line">最近刷新：{updatedAt || "读取中"}</p>
         </section>
 
         <nav className="admin-tabs" aria-label="后台模块">
@@ -378,7 +340,7 @@ export function AdminView() {
                 <article className="admin-record-row" key={user.name}>
                   <div>
                     <strong>{user.name}</strong>
-                    <span>{user.targetRole} · {user.versionCount} 个简历版本 · {user.interestCount} 条订单线索</span>
+                    <span>{user.targetRole} · {user.versionCount} 个简历版本 · {user.interestCount} 条反馈与意向</span>
                     <em>最近活动：{formatDate(user.latestAt)}</em>
                   </div>
                 </article>
@@ -390,7 +352,7 @@ export function AdminView() {
 
         {active === "orders" && (
           <section className="panel">
-            <PanelHeading eyebrow="订单" title="订单线索" />
+            <PanelHeading eyebrow="反馈" title="反馈与付费意向" />
             <FilterBar
               query={query}
               onQuery={setQuery}
@@ -409,7 +371,7 @@ export function AdminView() {
               <div>
                 <span className="eyebrow">模板</span>
                 <h2>模板上下架</h2>
-                <p>关闭上架后，前台编辑器不会再显示这个模板。</p>
+                <p>下架后，前台编辑器不再显示该模板。</p>
               </div>
               <div className="admin-actions">
                 <button type="button" className="secondary-button" onClick={restoreTemplates}>
@@ -452,7 +414,7 @@ export function AdminView() {
                 </article>
               ))}
             </div>
-            <p className="admin-sync-line">{templatesSavedAt ? `最近保存：${templatesSavedAt}` : "修改后请点击保存模板。"}</p>
+            <p className="admin-sync-line">{templatesSavedAt ? `最近保存：${templatesSavedAt}` : "修改后请点击保存。"}</p>
           </section>
         )}
 
@@ -462,7 +424,7 @@ export function AdminView() {
               <div>
                 <span className="eyebrow">价格</span>
                 <h2>价格配置</h2>
-                <p>修改后点保存，前台的解锁套餐会同步显示新价格和文案。</p>
+                <p>保存后，前台套餐同步显示新价格与文案。</p>
               </div>
               <div className="admin-actions">
                 <button type="button" className="secondary-button" onClick={restorePricing}>
@@ -497,7 +459,7 @@ export function AdminView() {
                 </article>
               ))}
             </div>
-            <p className="admin-sync-line">{pricingSavedAt ? `最近保存：${pricingSavedAt}` : "修改后请点击保存价格。"}</p>
+            <p className="admin-sync-line">{pricingSavedAt ? `最近保存：${pricingSavedAt}` : "修改后请点击保存。"}</p>
           </section>
         )}
 
@@ -610,7 +572,7 @@ function ModuleGrid({ onOpen }: { onOpen: (tab: AdminTab) => void }) {
           <button type="button" className="admin-module-card" key={tab.id} onClick={() => onOpen(tab.id)}>
             <Icon size={22} />
             <strong>{tab.label}</strong>
-            <span>点击进入模块</span>
+            <span>进入模块</span>
           </button>
         );
       })}
@@ -690,7 +652,7 @@ function VersionPreview({ version }: { version: SavedResumeVersion | null }) {
         </div>
       ) : (
         <div className="admin-preview">
-          <span>还没有可预览的简历版本。</span>
+          <span>暂无可预览的简历版本。</span>
         </div>
       )}
     </aside>
@@ -701,7 +663,7 @@ function EmptyRow({ title }: { title: string }) {
   return (
     <div className="admin-empty-row">
       <strong>{title}</strong>
-      <span>刷新后会自动显示最新记录。</span>
+      <span>刷新后显示最新记录。</span>
     </div>
   );
 }
@@ -770,14 +732,14 @@ function toExcelWorkbook({
       rows: [
         ["导出时间", updatedAt],
         ["用户数", String(new Set([...versions.map((item) => item.candidateName), ...interest.map((item) => item.candidateName)]).size)],
-        ["真实订单", String(interest.length)],
+        ["反馈与付费意向", String(interest.length)],
         ["简历版本", String(versions.length)],
         ["上架模板", String(templates.filter((template) => template.enabled).length)],
         ["价格方案", String(prices.length)]
       ]
     },
     {
-      title: "真实订单与解锁意向",
+      title: "反馈与付费意向",
       rows: [
         ["时间", "姓名", "目标岗位", "套餐", "来源", "联系方式", "备注"],
         ...interest.map((item) => [

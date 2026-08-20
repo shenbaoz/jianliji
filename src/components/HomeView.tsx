@@ -1,5 +1,5 @@
 import { memo, useRef, useState, type ReactNode } from "react";
-import { ArrowRight, Eye, FileUp, Lock, PenLine, RotateCcw } from "lucide-react";
+import { ArrowRight, Eye, FileUp, PenLine, RotateCcw } from "lucide-react";
 import { ResumeDocument } from "./ResumeDocument";
 import { PageShell } from "./ProductShell";
 import { BasicInfoFields } from "./BasicInfoFields";
@@ -41,7 +41,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     if (file.size > resumeUploadLimitBytes) {
-      setFileStatus(`文件过大，请上传 ${resumeUploadLimitText} 以内的 PDF、DOCX 或 TXT 简历。`);
+      setFileStatus(`文件过大，请上传 ${resumeUploadLimitText} 以内的 PDF、DOCX 或 TXT。`);
       return;
     }
     const seq = ++uploadSeq.current;
@@ -69,7 +69,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
       setTab("preview");
     } catch (error) {
       if (seq !== uploadSeq.current) return;
-      setFileStatus(error instanceof Error ? error.message : "简历解析失败，请换一个文件试试。");
+      setFileStatus(error instanceof Error ? error.message : "解析失败，请更换文件重试。");
     }
   };
 
@@ -82,76 +82,74 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
   return (
     <PageShell
       active="workspace"
-      title="优化已有简历"
-      description="上传 PDF、DOCX，或直接粘贴文字。选择求职方向后直接生成，不需要岗位 JD。"
+      title="导入简历"
+      description="上传文件或粘贴文字。系统会识别内容并生成可编辑版本。"
       actions={
         <div className="flex gap-2">
           {resumeLength > 0 && (
-            <button type="button" className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50" onClick={handleClearResume}>
+            <button type="button" className="secondary-button" onClick={handleClearResume}>
               <RotateCcw size={14} />
               清除
             </button>
           )}
-          <button type="button" className="inline-flex h-9 items-center gap-2 rounded-md bg-sky-700 px-4 text-xs font-semibold text-white hover:bg-sky-800 disabled:bg-slate-300" onClick={onRefine} disabled={!canContinue || isRefining}>
-            {isRefining ? "正在整理…" : "开始整理"}
+          <button type="button" className="primary-button" onClick={onRefine} disabled={!canContinue || isRefining}>
+            {isRefining ? "整理中…" : "开始整理"}
             <ArrowRight size={14} />
           </button>
         </div>
       }
     >
-      <div className="grid min-h-[calc(100vh-164px)] grid-cols-1 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(360px,0.44fr)_minmax(520px,0.56fr)]">
-        <section className={tab === "edit" ? "flex min-h-0 flex-col lg:flex" : "hidden min-h-0 flex-col lg:flex"}>
-          <div className="flex min-h-14 items-center justify-between border-b border-slate-200 px-4">
+      <div className="workspace-split">
+        <section className={tab === "edit" ? "workspace-pane workspace-pane-edit" : "workspace-pane workspace-pane-edit is-hidden-mobile"}>
+          <header className="workspace-pane-header">
             <div>
-              <h2 className="text-sm font-semibold text-slate-950">导入已有简历</h2>
-              <p className="text-xs text-slate-500">{resumeLength} 字 · 上传文件使用随机临时链接并按期清理</p>
+              <h2>导入简历</h2>
+              <p>{resumeLength} 字 · 文件临时保存并定期清理</p>
             </div>
-            {resumeLength > 0 && <span className="text-xs font-medium text-emerald-700">已就绪</span>}
-          </div>
-
-          <div className="border-b border-slate-200 p-5">
-            <label className="mb-4 block text-sm font-semibold text-slate-800">求职方向 <span className="font-normal text-slate-500">（可选）</span><input className="mt-2 h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-normal" value={input.targetRole === "通用求职版" ? "" : input.targetRole} onChange={(event) => update("targetRole", event.target.value)} placeholder="例如：新媒体运营；不填则生成通用求职版" /></label>
-            <BasicInfoFields value={basicInfo} onChange={updateBasicInfo} collapsed />
-            <label className="mt-5 flex min-h-44 cursor-pointer justify-center rounded-md border-2 border-dashed border-slate-300 px-6 py-9 hover:border-sky-400">
-              <span className="text-center">
-                <FileUp size={44} className="mx-auto text-sky-700" />
-                <strong className="mt-4 block text-lg font-semibold text-slate-800">选择文件，或拖到这里</strong>
-                <span className="mt-2 flex items-center justify-center text-sm text-slate-500">
-                  <Lock size={13} className="mr-1 text-slate-400" />
-                  PDF / DOCX / TXT，{resumeUploadLimitText} 以内
-                </span>
-                <em className="mt-4 inline-flex rounded-full bg-sky-700 px-6 py-2 text-sm font-semibold not-italic text-white">选择文件</em>
-                {fileStatus && <span className="mt-4 block text-xs leading-6 text-sky-900">{fileStatus}</span>}
-              </span>
-              <input className="sr-only" type="file" accept=".txt,.pdf,.docx" onChange={(event) => handleFile(event.target.files?.[0])} />
+          </header>
+          <div className="workspace-pane-body">
+            <label className="field job-direction">
+              <span>求职方向 <em>（可选）</em></span>
+              <input
+                value={input.targetRole === "通用求职版" ? "" : input.targetRole}
+                onChange={(event) => update("targetRole", event.target.value)}
+                placeholder="例如：新媒体运营；不填则生成通用版本"
+              />
             </label>
-
+            <BasicInfoFields value={basicInfo} onChange={updateBasicInfo} collapsed />
+            <label className="upload-card">
+              <input className="sr-only" type="file" accept=".txt,.pdf,.docx" onChange={(event) => handleFile(event.target.files?.[0])} />
+              <span className="upload-card-inner">
+                <FileUp size={40} className="upload-card-icon" />
+                <strong className="upload-card-title">选择文件，或拖到这里</strong>
+                <span className="upload-card-meta">PDF / DOCX / TXT，{resumeUploadLimitText} 以内</span>
+                <em className="upload-card-button">选择文件</em>
+                {fileStatus && <span className="upload-card-status">{fileStatus}</span>}
+              </span>
+            </label>
+            <textarea
+              className="resume-textarea"
+              value={input.resumeText}
+              onChange={(event) => update("resumeText", event.target.value)}
+              placeholder="也可以直接粘贴简历文字。"
+            />
           </div>
-
-          <textarea
-            className="min-h-[420px] flex-1 resize-none bg-white px-5 py-5 text-sm leading-8 text-slate-700 outline-none placeholder:text-slate-400 lg:min-h-0"
-            value={input.resumeText}
-            onChange={(event) => update("resumeText", event.target.value)}
-            placeholder="也可以直接把简历文字粘贴到这里。"
-          />
         </section>
 
-        <section className={tab === "preview" ? "flex min-h-0 flex-col border-l border-slate-200 bg-slate-100 lg:flex" : "hidden min-h-0 flex-col border-l border-slate-200 bg-slate-100 lg:flex"}>
-          <div className="flex min-h-14 items-center justify-between border-b border-slate-200 bg-white px-4">
+        <section className={tab === "preview" ? "workspace-pane workspace-pane-preview" : "workspace-pane workspace-pane-preview is-hidden-mobile"}>
+          <header className="workspace-pane-header">
             <div>
-              <h2 className="text-sm font-semibold text-slate-950">纸张预览</h2>
-              <p className="text-xs text-slate-500">简历记实时预览</p>
+              <h2>纸张预览</h2>
+              <p>实时预览</p>
             </div>
-            <span className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500">A4</span>
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto p-4 custom-scrollbar sm:p-6">
-            <div className="mx-auto max-w-[760px]">
+            <span className="paper-badge">A4</span>
+          </header>
+          <div className="workspace-pane-body">
+            <div className="resume-viewport custom-scrollbar">
               {resumeLength > 0 ? (
-                <ResumeDocument text={input.resumeText} template={previewTemplate} />
+                <ResumeDocument text={input.resumeText} template={previewTemplate} candidateName={input.candidateName} />
               ) : (
-                <div className="flex min-h-[560px] items-center justify-center border border-dashed border-slate-300 bg-white text-center text-sm leading-7 text-slate-400">
-                  简历内容会在这里以纸张形式预览。
-                </div>
+                <div className="resume-empty-state">简历内容会在这里以纸张形式预览。</div>
               )}
             </div>
           </div>

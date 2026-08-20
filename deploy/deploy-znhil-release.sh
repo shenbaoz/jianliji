@@ -42,8 +42,8 @@ chmod 600 "$runtime_env"
 sed 's/^BACKEND_PORT=.*/BACKEND_PORT=3199/' "$runtime_env" > "$test_env"
 chmod 600 "$test_env"
 
-docker cp "$live_container:/app/server/app.mjs" "$staging/production-app.mjs"
-node /root/patch-production-ai-route.mjs "$staging/production-app.mjs"
+cp "$staging/server/app.mjs" "$staging/production-app.mjs"
+node /root/patch-production-ai-route.mjs "$staging/production-app.mjs" || true
 
 docker create --name "$build_container" "$old_image" >/dev/null
 docker cp "$staging/dist/." "$build_container:/app/dist"

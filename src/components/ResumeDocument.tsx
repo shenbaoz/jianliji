@@ -7,6 +7,7 @@ type Props = {
   text: string;
   template: ResumeTemplate;
   portraitDataUrl?: string;
+  candidateName?: string;
 };
 
 const sectionTitles = new Set([
@@ -23,6 +24,12 @@ const sectionTitles = new Set([
   "项目经历",
   "校园项目",
   "校园经历",
+  "校园实践经历",
+  "社会实践经历",
+  "实践经历",
+  "社会经历",
+  "在校经历",
+  "学生工作经历",
   "教育经历",
   "教育背景",
   "技能关键词",
@@ -49,41 +56,116 @@ type ParsedSection = {
   lines: string[];
 };
 
+type PersonalInfo = {
+  label: string;
+  value: string;
+};
+
 const hiddenDocumentSections = new Set(["关键成果", "可继续补充的真实证据", "投递版本建议", "优化说明"]);
 
-function parseResumeText(text: string) {
+const CITY_KEYWORDS =
+  "北京|上海|广州|深圳|杭州|成都|武汉|南京|苏州|厦门|重庆|郑州|三亚|泉州|天津|西安|长沙|合肥|宁波|青岛|大连|佛山|东莞|无锡|常州|福州|昆明|南昌|沈阳|济南|哈尔滨|长春|南宁|贵阳|太原|石家庄";
+const CITY_RE = new RegExp(CITY_KEYWORDS);
+
+function parseResumeText(text: string, candidateName?: string) {
   const lines = text
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const firstLineParts = (lines[0] || "求职者").split(/｜|\|/).map((item) => item.trim()).filter(Boolean);
-  const isMetaFirstLine = /^(?:求职目标|求职意向|联系方式)\s*[:：]/.test(lines[0] || "");
-  const name = isMetaFirstLine ? "求职者" : (firstLineParts[0] || "求职者");
-  const inferredCity = firstLineParts.find((item) => /北京|上海|广州|深圳|杭州|成都|武汉|南京|苏州|厦门|重庆|郑州|三亚|泉州/.test(item));
-  const target = lines.find((line) => line.startsWith("求职目标："))?.replace("求职目标：", "") || firstLineParts.slice(1).join(" / ") || "目标岗位";
+
+  // 1) 优先从正文里提取"姓名：XXX"这一行作为姓名
+  const explicitNameMatch = lines
+    .map((line) => line.match(/^姓\s*名\s*[:：]\s*(.+)$/))
+    .find(Boolean) as RegExpMatchArray | undefined;
+  const explicitName = explicitNameMatch ? explicitNameMatch[1].trim() : "";
+
+  const firstLine = lines[0] || "";
+  const firstLineParts = firstLine.split(/｜|\|/).map((item) => item.trim()).filter(Boolean);
+
+  // 首行如果是"求职目标/求职意向/联系方式/姓名："这类元信息行，不算姓名行
+  const isMetaFirstLine = /^(?:求职目标|求职意向|联系方式|姓\s*名)\s*[:：]/.test(firstLine);
+
+  // 姓名优先级：显式 candidateName > 正文里的"姓名：XXX" > 首行非元信息时的首段 > "求职者"
+  let name = "求职者";
+  if (candidateName?.trim()) {
+    name = candidateName.trim();
+  } else if (explicitName) {
+    name = explicitName;
+  } else if (!isMetaFirstLine) {
+    name = firstLineParts[0] || "求职者";
+  }
+
+  const inferredCity = firstLineParts.find((item) => CITY_RE.test(item));
+
+  // 目标岗位：只有真实存在求职意向/求职目标才展示；否则不展示（避免给用户看到"目标岗位"四个字）
+  let target = "";
+  const jobTargetMatch = lines
+    .map((line) => line.match(/^(?:求职目标|求职意向|目标岗位)\s*[:：]\s*(.+)$/))
+    .find(Boolean) as RegExpMatchArray | undefined;
+  if (jobTargetMatch) {
+    target = jobTargetMatch[1].trim();
+  }
+  if (!target && !isMetaFirstLine) {
+    const rest = firstLineParts.slice(1).join(" / ").trim();
+    // 过滤掉明显不是岗位名称的内容（电话、邮箱、城市、年龄等）
+    const looksLikeRole =
+      rest &&
+      !/^\d/.test(rest) &&
+      !/@/.test(rest) &&
+      !CITY_RE.test(rest) &&
+      !/\d+\s*岁/.test(rest) &&
+      !/1[3-9]\d/.test(rest);
+    if (looksLikeRole) target = rest;
+  }
+
+  const personalInfo = lines.flatMap(extractPersonalInfo);
+
   const contactLine = lines.find((line) => line.startsWith("联系方式：")) || "";
   const contactParts = contactLine.replace("联系方式：", "").split(/｜|\|/).map((item) => item.trim()).filter(Boolean);
   const phone = contactParts.find((item) => /1[3-9]\d[- ]?\d{4}[- ]?\d{4}/.test(item)) || "";
   const email = contactParts.find((item) => /@/.test(item)) || "";
   const age = contactParts.find((item) => /\d+\s*岁/.test(item));
-  const contactCity = contactParts.find((item) => /北京|上海|广州|深圳|杭州|成都|武汉|南京|苏州|厦门|重庆|郑州|三亚|泉州|天津|西安|长沙|合肥|宁波|青岛|大连|佛山|东莞|无锡|常州|福州|昆明|南昌|沈阳|济南|哈尔滨|长春|南宁|贵阳|太原|石家庄/.test(item));
+  const contactCity = contactParts.find((item) => CITY_RE.test(item));
+
+  // 个人信息字段标签：这些行属于基本信息区，绝不允许混进section里
+  // 支持 "政治面貌：共青团员" 完整冒号格式，以及跨行拆分的单字行如"性"/"别"/"籍"/"贯"
+  const personalFieldLineRe =
+    /^(?:姓\s*名|名|性\s*别|别|政治面貌|籍\s*贯|贯|出生年月|出生日期|出生|年龄|婚否|婚姻状况|身高|体重|血型|户口|身份证|住址|通讯地址|地址|邮编|邮政编码|国籍|民族|电话|手机|联系方式|电子邮箱|邮箱|电\s*邮|E-mail|Email|电子邮件|求职意向|求职目标|目标岗位|期望职位|期望工作|期望地点|期望城市|期望薪资|薪资要求|可到岗时间|入职时间|毕业时间|毕业年份|毕业院校|学\s*历|专\s*业|学位|学院|系别|研究方向|导师|学制|学号|院\s*校|政治\s*面貌)\s*[:：]/;
+  const personalSingleCharRe = /^(?:性|别|籍|贯|姓|名|学|专|电|邮|院|校)$/;
+  function isPersonalInfoLine(line: string) {
+    const t = line.trim();
+    if (!t) return true;
+    if (personalFieldLineRe.test(t)) return true;
+    if (personalSingleCharRe.test(t)) return true;
+    return false;
+  }
+
   const sections: ParsedSection[] = [];
   let current: ParsedSection | null = null;
 
   lines.slice(1).forEach((line) => {
-    if (line.startsWith("求职目标：") || line.startsWith("联系方式：")) return;
+    if (/^(?:求职目标|求职意向|目标岗位|联系方式|姓\s*名)\s*[:：]/.test(line)) return;
+    // 修复：个人信息字段行（政治面貌/性别/籍贯/名/性/别等）不得混入"个人优势"等section
+    if (isPersonalInfoLine(line)) return;
+    const normalizedHeading = line.replace(/[：:]\s*$/, "");
     if (/^技能[:：]/.test(line)) {
       current = { title: "技能关键词", lines: [line.replace(/^技能[:：]\s*/, "")] };
       sections.push(current);
       return;
     }
-    if (sectionTitles.has(line)) {
-      current = { title: line, lines: [] };
+    if (sectionTitles.has(normalizedHeading)) {
+      current = { title: normalizedHeading, lines: [] };
       sections.push(current);
       return;
     }
+    // 部分 PDF 的蓝色栏目条是图片，提取文字时会丢失标题。遇到“专业技能”
+    // 后的日期行，开始一段实践经历，避免把教育和经历误称为个人优势。
+    if (current?.title === "专业技能" && /^(?:19|20)\d{2}[.\-/]/.test(line)) {
+      current = { title: "实践经历", lines: [] };
+      sections.push(current);
+    }
     if (!current) {
-      current = { title: "个人优势", lines: [] };
+      current = { title: looksLikeEducationLine(line) ? "教育背景" : "简历内容", lines: [] };
       sections.push(current);
     }
     current.lines.push(line);
@@ -95,8 +177,24 @@ function parseResumeText(text: string) {
     phone,
     email,
     city: [age, contactCity || inferredCity].filter(Boolean).join(" / "),
+    personalInfo,
     sections: sections.filter((section) => section.lines.length > 0)
   };
+}
+
+function looksLikeEducationLine(line: string) {
+  return /^(?:19|20)\d{2}[.\-/]/.test(line) || /(?:大学|学院|本科|硕士|博士)/.test(line);
+}
+
+function extractPersonalInfo(line: string): PersonalInfo[] {
+  const labelPattern = /(?:性别|别|政治面貌|籍贯|出生年月|出生日期|出生|年龄|电子邮箱|邮箱|E-mail|Email)\s*[:：]/g;
+  const matches = [...line.matchAll(labelPattern)];
+  return matches.map((match, index) => {
+    const rawLabel = match[0].replace(/\s*[:：]$/, "");
+    const label = rawLabel === "别" ? "性别" : rawLabel;
+    const value = line.slice((match.index || 0) + match[0].length, matches[index + 1]?.index).trim();
+    return { label, value };
+  }).filter((item) => item.value);
 }
 
 function lineClassName(line: string) {
@@ -108,8 +206,8 @@ function lineClassName(line: string) {
   return "resume-line";
 }
 
-export const ResumeDocument = memo(function ResumeDocument({ text, template, portraitDataUrl }: Props) {
-  const parsed = parseResumeText(text);
+export const ResumeDocument = memo(function ResumeDocument({ text, template, portraitDataUrl, candidateName }: Props) {
+  const parsed = parseResumeText(text, candidateName);
   const visibleSections = parsed.sections.filter((section) => !hiddenDocumentSections.has(section.title));
   const templateClass = `resume-template-${template.id}`;
 
@@ -118,7 +216,7 @@ export const ResumeDocument = memo(function ResumeDocument({ text, template, por
       <header className="resume-document-header">
         <div>
           <h2>{parsed.name}</h2>
-          <p>{parsed.target}</p>
+          {parsed.target && parsed.target !== "目标岗位" && <p>{parsed.target}</p>}
         </div>
         <ul aria-label="联系方式">
           {parsed.phone && <li>
@@ -138,6 +236,16 @@ export const ResumeDocument = memo(function ResumeDocument({ text, template, por
       </header>
 
       <div className="resume-document-body">
+        {parsed.personalInfo.length > 0 && (
+          <section className="resume-section">
+            <h3>基础信息</h3>
+            <div className="resume-section-content">
+              {parsed.personalInfo.map((item, index) => (
+                <p className="resume-line" key={`${item.label}-${index}`}>{item.label}：{item.value}</p>
+              ))}
+            </div>
+          </section>
+        )}
         {visibleSections.map((section, sectionIndex) => (
           <section className="resume-section" key={`${section.title}-${sectionIndex}`}>
             <h3>{section.title}</h3>

@@ -97,6 +97,25 @@ test("parseResumeFile extracts a name from spaced labels used by exported PDFs",
   assert.equal(result.candidateName, "杜小艳");
 });
 
+test("parseResumeFile keeps multi-line personal fields separate and detects education details", async () => {
+  const result = await parseResumeFile({
+    originalname: "two-column-resume.txt",
+    mimetype: "text/plain",
+    buffer: Buffer.from("姓\n名：杜小艳\n性\n别：女\n政治面貌：共青团员\n籍\n贯：四川省绵阳市\n出生年月：2006.02\n电子邮箱：2127559788@qq.com\n联系方式：18880825628\n2024.09-2028.07\n四川传媒学院\n新闻学/ 本科\n专业技能：\n剪映", "utf8")
+  });
+
+  assert.match(result.text, /^姓名：杜小艳\n性别：女\n政治面貌：共青团员\n籍贯：四川省绵阳市/m);
+  assert.equal(result.candidateName, "杜小艳");
+  assert.deepEqual(result.basicInfo, {
+    name: "杜小艳",
+    phone: "18880825628",
+    email: "2127559788@qq.com",
+    school: "四川传媒学院",
+    major: "新闻学",
+    degree: "本科"
+  });
+});
+
 function createPdfBuffer(text) {
   return new Promise((resolve) => {
     const chunks = [];

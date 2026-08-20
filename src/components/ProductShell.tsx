@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckCircle2, FileText, PenLine, Target } from "lucide-react";
+import { Brain, CheckCircle2, FileUp, Target } from "lucide-react";
 import type { WorkflowStep } from "../types";
 
 type Stage = {
@@ -10,9 +10,9 @@ type Stage = {
 };
 
 const workflowStages: Stage[] = [
-  { id: "workspace", label: "导入简历", helper: "填写材料", icon: <FileText size={16} /> },
-  { id: "job", label: "求职方向", helper: "填写方向", icon: <Target size={16} /> },
-  { id: "editor", label: "AI 生成简历", helper: "AI 精修后编辑导出", icon: <PenLine size={16} /> }
+  { id: "workspace", label: "导入简历", helper: "", icon: <FileUp size={16} /> },
+  { id: "job", label: "求职方向", helper: "", icon: <Target size={16} /> },
+  { id: "editor", label: "AI 生成简历", helper: "", icon: <Brain size={16} /> }
 ];
 
 export function PageShell({
@@ -65,10 +65,9 @@ export function WorkflowRail({ active }: { active: WorkflowStep }) {
 
   return (
     <div>
-      <p className="workflow-progress-copy mb-2 text-right text-xs text-[#71706b]">已完成 {completed} / {workflowStages.length} 步 · 约还需 2 分钟</p>
+      <p className="workflow-progress-copy mb-2 text-right text-xs text-[#71706b]">第 {completed} / {workflowStages.length} 步</p>
       <p className="workflow-mobile-summary" aria-label={`当前是第 ${completed} 步，共 ${workflowStages.length} 步`}>
-        <span>第 {completed}/{workflowStages.length} 步</span>
-        <strong>{activeLabel}</strong>
+        当前步骤：{activeLabel}（第 {completed}/{workflowStages.length} 步）
       </p>
       <ol className="workflow-rail">
         {workflowStages.map((step, index) => {

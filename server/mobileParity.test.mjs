@@ -7,7 +7,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 test("mobile views reuse refinement and final export handlers", async () => {
   const [app, editor] = await Promise.all([read("src/App.tsx"), read("src/components/EditorView.tsx")]);
   assert.match(app, /onGenerate=\{refine\}/);
-  assert.match(editor, /onClick=\{handleDownloadPdf\}/);
+  assert.match(editor, /onClick=\{\(\) => requestExport\(handleDownloadPdf\)\}/);
   assert.doesNotMatch(editor, /onClick=\{handleSave\}/);
 });
 
@@ -44,6 +44,17 @@ test("shared pages expose the responsive presentation contract", async () => {
   assert.match(editor, /max-w-\[1100px\]/);
   assert.match(css, /safe-area-inset-bottom/);
   assert.match(css, /@media\s*\(max-width:\s*767px\)/);
+});
+
+test("the mobile workflow label is clearly a status, not a fake button", async () => {
+  const [shell, css] = await Promise.all([read("src/components/ProductShell.tsx"), read("src/styles.css")]);
+
+  assert.match(shell, /当前步骤：\{activeLabel\}（第 \{completed\}\/\{workflowStages\.length\} 步）/);
+  assert.doesNotMatch(shell, /<strong>\{activeLabel\}<\/strong>/);
+  const mobileSummaryRules = css.match(/\.workflow-mobile-summary\s*\{[^}]*\}/g) || [];
+  const mobileSummary = mobileSummaryRules.at(-1) || "";
+  assert.match(mobileSummary, /display:\s*block;/);
+  assert.doesNotMatch(mobileSummary, /min-height:\s*44px;/);
 });
 
 test("the resume preview recognizes the AI core-advantages section", async () => {

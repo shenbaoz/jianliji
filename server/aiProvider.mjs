@@ -262,75 +262,6 @@ export function sanitizeResumeDraft(draftText, sourceText, evidenceAnswers = [])
   return text.replace(/\n{3,}/g, "\n\n").trim();
 }
 
-// 原文写了"至今"的经历，成稿必须保留"至今"：AI 改写有时会把时间段
-// 结尾的具体日期当作"完整"处理、或精简掉"至今"。这里按组织/职位锚点
-// 找到成稿中对应条目，若其时间段以具体年月结尾（无"至今"），则恢复"至今"。
-export function restoreOngoingDates(draftText, sourceText) {
-  const draft = String(draftText || "");
-  const source = String(sourceText || "");
-  // 同时覆盖中文"至今"与英文 "Present"（词边界防误匹配 "presentation"），
-  // 英文简历的持续状态不再只依赖 AI 自觉。
-  const need = (source.match(/至今/g) || []).length + (source.match(/\bPresent\b/gi) || []).length;
-  const have = (draft.match(/至今/g) || []).length + (draft.match(/\bPresent\b/gi) || []).length;
-  if (need === 0 || have >= need) return draft;
-
-  const sourceLines = source.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  const anchors = [];
-  for (let i = 0; i < sourceLines.length; i++) {
-    const line = sourceLines[i];
-    if (!/至今/.test(line) && !/\bPresent\b/i.test(line)) continue;
-    // 组织/职位锚点优先取上一行（如 "品牌推广 | 大学搜题酱" / "Hepsiemlak"），
-    // 仅当上一行也是日期或不存在时才退回本行。
-    const previous = sourceLines[i - 1] || "";
-    const contextLine = previous && !/\d{4}\s*[./年]/.test(previous) ? previous : line;
-    const org = contextLine.split(/[|｜]/).map((part) => part.trim()).filter(Boolean).pop() || contextLine;
-    const name = org.replace(/\d{4}[./年]?\d{0,2}.*$/g, "").trim();
-    if (name && name.length >= 2 && !/^(?:至今|迄今|Present)$/i.test(name)) {
-      // 源条目开始日期：优先取锚点行内的日期（如 "Jan 2018 - Present" 同行）；
-      // 双栏碎片（"Dec 2021" 与 "Present" 分居两行）则向上 4 行内找最近日期，
-      // 供成稿条目完全丢失日期时补回 "开始-至今"。
-      let startDate = (line.match(/\d{4}\s*[./年]\s*\d{1,2}\s*月?/) || [])[0] || "";
-      if (!startDate) {
-        for (let k = i - 1; k >= Math.max(0, i - 4); k--) {
-          const m = sourceLines[k].match(/\d{4}\s*[./年]\s*\d{1,2}\s*月?|(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b\s*)?\d{4}\b/);
-          if (m) { startDate = m[0].trim(); break; }
-        }
-      }
-      anchors.push({ name, startDate });
-    }
-  }
-  if (anchors.length === 0) return draft;
-
-  let changed = false;
-  const lines = draft.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  for (const anchor of anchors) {
-    const idx = lines.findIndex((line) => line.includes(anchor.name));
-    if (idx < 0) continue;
-    // 日期可能在组织/职位行的下一行
-    const targetIdx = /\d{4}\s*[./年]/.test(lines[idx]) ? idx
-      : (lines[idx + 1] && /\d{4}\s*[./年]/.test(lines[idx + 1]) ? idx + 1 : -1);
-    if (targetIdx < 0) {
-      // 成稿条目完全丢失了日期（AI 把整段时间范围删掉了）：
-      // 追加 "开始日期-至今"（找不到开始日期则仅 "至今"），保证持续状态不丢。
-      const suffix = anchor.startDate ? ` | ${anchor.startDate}-至今` : " | 至今";
-      lines[idx] = lines[idx].replace(/\s+$/, "") + suffix;
-      changed = true;
-      continue;
-    }
-    const line = lines[targetIdx];
-    if (/至今/.test(line)) continue;
-    const rangeEnd = line.match(/(\d{4}\s*[./年]\s*\d{1,2}\s*月?)\s*[-–—~至]\s*(\d{4}\s*[./年]\s*\d{1,2}\s*月?)\s*$/);
-    if (rangeEnd) {
-      // $1 可能因 \s* 贪婪吞入尾随空格（"2021.06 - 2023.03" → "2021.06 "），
-      // trim 后再拼 "-至今"，保证输出 "2021.06-至今" 而非 "2021.06 -至今"。
-      lines[targetIdx] = line.replace(/(\d{4}\s*[./年]\s*\d{1,2}\s*月?)\s*[-–—~至]\s*\d{4}\s*[./年]\s*\d{1,2}\s*月?\s*$/, (_, start) => `${start.trim()}-至今`);
-      changed = true;
-    }
-  }
-  if (!changed) return draft;
-  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-
 export function createDeepSeekClient(options = {}) {
   return createChatCompletionClient({
     provider: "deepseek",
@@ -458,11 +389,8 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
       redacted.replacements
     );
     const draft = sanitizeResumeDraft(parsed?.text, sourceText);
-    const text = restoreOngoingDates(
-      restoreSourceContact(
-        restoreCandidateName(restoreContacts(draft, redacted.replacements), candidateName),
-        sourceText
-      ),
+    const text = restoreSourceContact(
+      restoreCandidateName(restoreContacts(draft, redacted.replacements), candidateName),
       sourceText
     );
     const changes = Array.isArray(parsed?.changes)
@@ -570,11 +498,8 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
           autoStripped = true;
         }
       }
-      const text = restoreOngoingDates(
-        restoreSourceContact(
-          restoreCandidateName(restoreContacts(draft, redacted.replacements), extractCandidateName(resumeText)),
-          resumeText
-        ),
+      const text = restoreSourceContact(
+        restoreCandidateName(restoreContacts(draft, redacted.replacements), extractCandidateName(resumeText)),
         resumeText
       );
       const highlights = Array.isArray(quality.highlights) ? quality.highlights.slice(0, 3) : [];
