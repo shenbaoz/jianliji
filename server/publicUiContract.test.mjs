@@ -111,6 +111,14 @@ test("editor preview uses the recommended single-column reading flow", async () 
   assert.match(styles, /\.resume-section\s*\{\s*display:\s*block;/);
 });
 
+test("generated PDF header keeps compact personal information", async () => {
+  const source = await read("server/vendor/pymupdf_official_replace.py");
+  assert.match(source, /personal_fields/);
+  assert.match(source, /性别/);
+  assert.match(source, /电子邮箱/);
+  assert.match(source, /联系方式/);
+});
+
 test("footer exposes the required public security registration", async () => {
   const footer = await read("src/components/Footer.tsx");
   assert.match(footer, /beian\.mps\.gov\.cn\/\#\/query\/webSearch\?code=51070302110762/);

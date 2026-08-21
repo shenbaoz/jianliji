@@ -612,6 +612,25 @@ def create_generated_resume_pdf(payload, portrait=None):
     page.insert_text((margin, y), name, fontname=font_name, fontsize=21, color=(0.08, 0.20, 0.18))
     if portrait:
         page.insert_image(pymupdf.Rect(478, 38, 537, 112), stream=portrait["bytes"], keep_proportion=True)
+    personal_fields = []
+    personal_patterns = [
+        ("性别", r"^性\s*别\s*[:：]\s*(.+)$"),
+        ("政治面貌", r"^政治\s*面貌\s*[:：]\s*(.+)$"),
+        ("籍贯", r"^籍\s*贯\s*[:：]\s*(.+)$"),
+        ("出生年月", r"^出生年月\s*[:：]\s*(.+)$"),
+        ("邮箱", r"^(?:电子邮箱|邮箱|电\s*邮)\s*[:：]\s*(.+)$"),
+        ("电话", r"^(?:联系方式|电话|手机)\s*[:：]\s*(.+)$"),
+    ]
+    for label, pattern in personal_patterns:
+        match = next((re.match(pattern, line) for line in lines if re.match(pattern, line)), None)
+        if match:
+            personal_fields.append(f"{label}：{match.group(1).strip()}")
+    if personal_fields:
+        first_row = "　｜　".join(personal_fields[:4])
+        second_row = "　｜　".join(personal_fields[4:])
+        page.insert_text((margin, 80), first_row, fontname=font_name, fontsize=8.5, color=(0.25, 0.31, 0.29))
+        if second_row:
+            page.insert_text((margin, 94), second_row, fontname=font_name, fontsize=8.5, color=(0.25, 0.31, 0.29))
     y += 34
     y = max(y, 126 if portrait else y)
     page.draw_line((margin, y), (549, y), color=(0.08, 0.28, 0.24), width=1.5)
