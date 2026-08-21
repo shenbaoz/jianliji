@@ -52,11 +52,13 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
         createOriginalResumePreview(file)
       ]);
       if (seq !== uploadSeq.current) return;
-      const nextBasicInfo = prefillBasicInfo(parsedResume.text, parsedResume.candidateName, parsedResume.basicInfo, basicInfo);
+      // 换了一份简历后，上一份文件的自动识别信息不能继续沿用；
+      // 否则姓名、电话、邮箱和学校会被带入下一份成稿。
+      const nextBasicInfo = prefillBasicInfo(parsedResume.text, parsedResume.candidateName, parsedResume.basicInfo, emptyBasicInfo);
       setBasicInfo(nextBasicInfo);
       onChange({
         ...input,
-        candidateName: input.candidateName.trim() || parsedResume.candidateName || "",
+        candidateName: parsedResume.candidateName || "",
         basicInfo: nextBasicInfo,
         resumeText: parsedResume.text,
         originalResumeHtml: originalPreview.html,
@@ -75,6 +77,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
 
   const handleClearResume = () => {
     onChange({ ...input, candidateName: "", resumeText: "", originalResumeHtml: undefined, originalResumeFileName: undefined, originalResumeMimeType: undefined, originalResumeFileUrl: undefined, originalResumeDataUrl: undefined });
+    setBasicInfo({ ...emptyBasicInfo });
     setFileStatus("");
     setTab("edit");
   };
