@@ -710,6 +710,12 @@ def create_generated_resume_pdf(payload, portrait=None):
             merged_body_lines.append(current)
         previous_is_block = starts_block
     body_lines = merged_body_lines
+    has_contact_only_header = len(lines) > 1 and any(
+        re.match(r"^(?:联系方式|电话|手机|电子邮箱|邮箱|电\s*邮)\s*[:：]", line)
+        for line in lines[1:]
+    )
+    if has_contact_only_header and (not body_lines or not normalize("".join(body_lines))):
+        raise RuntimeError("generated resume content is too short")
     available_height = 828 - 138
     base_height = sum(
         (14 if normalize(line) in section_names else 0)

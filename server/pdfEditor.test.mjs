@@ -292,6 +292,17 @@ test("createGeneratedResumePdf separates a section heading accidentally appended
   }
 });
 
+test("createGeneratedResumePdf rejects an effectively empty AI draft", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-generated-empty-export-"));
+  await assert.rejects(
+    createGeneratedResumePdf({
+      text: "中文姓名\n联系方式：chchlee@mit.edu"
+    , uploadDir }),
+    /generated resume content is too short/
+  );
+  await rm(uploadDir, { recursive: true, force: true });
+});
+
 test("createEditedPdfVersions can force the generated resume format", async () => {
   const uploadDir = await mkdtemp(join(tmpdir(), "resume-pdf-forced-generated-"));
   const sourceName = `forced-generated-${Date.now()}.pdf`;
