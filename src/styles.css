@@ -1207,6 +1207,7 @@ button.admin-module-card {
 .refining-note{margin:16px 0 0;color:#64748b;font-size:12px;line-height:1.7}
 @keyframes refining-spin{to{transform:rotate(360deg)}}
 @media(max-width:600px){.refining-overlay{padding:18px}.refining-card{padding:30px 22px;border-radius:18px}.refining-card h2{font-size:23px}}
+@media(max-width:700px){.app-toast{top:calc(40px + env(safe-area-inset-top) + 12px)}}
 @media(prefers-reduced-motion:reduce){.refining-spinner{animation-duration:3s}}
 
 /* Premium local preview: quiet editorial layout, no decorative AI-style effects. */
