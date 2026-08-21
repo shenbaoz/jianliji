@@ -602,6 +602,19 @@ def create_generated_resume_pdf(payload, portrait=None):
     margin = 46
     y = 50
     lines = [line.strip() for line in text.splitlines() if line.strip()]
+    # Some model outputs place the first section heading on the same line as the
+    # candidate name. Split it before measuring/drawing the header so long
+    # summaries never run outside the A4 page.
+    header_section_match = re.search(
+        r"(?:^|\s)(核心优势|个人优势|教育背景|教育经历|实习经历|工作经历|项目经历|校园经历|实践经历|技能|荣誉奖项|荣誉|证书)(?=\s|[-：:]|$)",
+        lines[0] if lines else ""
+    )
+    if header_section_match and header_section_match.start() > 0:
+        first_line = lines[0]
+        split_at = header_section_match.start()
+        if first_line[split_at].isspace():
+            split_at += 1
+        lines = [first_line[:split_at].strip(), first_line[split_at:].strip(), *lines[1:]]
     # 1) 优先从全文任意一行找"姓名：XXX"（不只是第一行），避免用户把姓名写在中间导致错取
     labeled_name = None
     for line in lines:

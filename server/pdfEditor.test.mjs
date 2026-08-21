@@ -268,6 +268,30 @@ test("createGeneratedResumePdf keeps a long one-page draft readable without drop
   }
 });
 
+test("createGeneratedResumePdf separates a section heading accidentally appended to the name line", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-generated-header-wrap-"));
+  const text = [
+    "中文姓名 核心优势 - 美国麻省理工学院化学工程博士，具备跨国实习经验",
+    "教育背景",
+    "美国麻省理工学院｜化学工程博士｜2005-2008",
+    "工作经历",
+    "参与制药与食品生产优化项目，完成数据分析与流程改进。"
+  ].join("\n");
+  try {
+    const result = await createGeneratedResumePdf({ text, uploadDir });
+    const parsed = await parseResumeFile({
+      buffer: await readFile(join(uploadDir, result.cleanOutputName)),
+      originalname: "generated-header-wrap.pdf",
+      mimetype: "application/pdf"
+    });
+    assert.match(parsed.text, /中文姓名\s*\n/);
+    assert.match(parsed.text, /核心优势/);
+    assert.doesNotMatch(parsed.text, /^中文姓名.*核心优势/m);
+  } finally {
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
 test("createEditedPdfVersions can force the generated resume format", async () => {
   const uploadDir = await mkdtemp(join(tmpdir(), "resume-pdf-forced-generated-"));
   const sourceName = `forced-generated-${Date.now()}.pdf`;
