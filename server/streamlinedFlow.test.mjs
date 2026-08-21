@@ -8,8 +8,8 @@ test("public start view offers simple existing-resume and novice paths without a
   const [app, start] = await Promise.all([read("src/App.tsx"), read("src/components/ResumeStartView.tsx")]);
 
   assert.match(app, /optimizeWithDeepSeek/);
-  assert.match(start, /我有简历，帮我优化/);
-  assert.match(start, /我是小白，从零开始/);
+  assert.match(start, /已有简历/);
+  assert.match(start, /从零创建/);
   assert.match(start, /求职方向/);
   assert.doesNotMatch(start, /岗位 JD/);
 });
@@ -23,7 +23,7 @@ test("public refinement shows neutral progress and does not expose AI, score, or
   ]);
   const publicSurface = `${start}\n${landing}\n${editor}`;
 
-  assert.match(app, /正在整理你的简历/);
+  assert.match(app, /正在生成简历/);
   assert.doesNotMatch(publicSurface, /DeepSeek|Kimi|AI |ATS|评分|匹配度|岗位分析|招聘者质检/);
 });
 
@@ -43,7 +43,7 @@ test("the public header contains only home and resume navigation", async () => {
   const header = await read("src/components/Header.tsx");
 
   assert.doesNotMatch(header, /案例库|onOpenCases/);
-  assert.match(header, /开始做简历/);
+  assert.match(header, /开始优化/);
 });
 
 test("completion exports a generated PDF instead of relying on the browser print dialog", async () => {

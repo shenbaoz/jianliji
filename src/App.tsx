@@ -56,7 +56,7 @@ export default function App() {
         throw new Error(refined.reviewFlags?.[0] || questions[0] || "信息不足，请补充具体经历。");
       }
       const preparedPdf = normalized.originalResumeFileUrl && /pdf/i.test(normalized.originalResumeMimeType || "")
-        ? await createEditedPdfPreview(normalized.originalResumeFileUrl, refined.text, refined.changes || [])
+        ? await createEditedPdfPreview(normalized.originalResumeFileUrl, refined.text, refined.changes || [], normalized.candidateName)
         : await createGeneratedPdf(refined.text, normalized.portraitDataUrl, normalized.candidateName);
       setInput(normalized);
       setFollowUpQuestions([]);

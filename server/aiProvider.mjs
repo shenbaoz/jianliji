@@ -262,6 +262,59 @@ export function sanitizeResumeDraft(draftText, sourceText, evidenceAnswers = [])
   return text.replace(/\n{3,}/g, "\n\n").trim();
 }
 
+// Preserve ongoing employment/experience dates when an AI rewrite drops the
+// original "至今"/"Present" marker.
+export function restoreOngoingDates(draftText, sourceText) {
+  const draft = String(draftText || "");
+  const source = String(sourceText || "");
+  const needed = (source.match(/至今/g) || []).length + (source.match(/\bPresent\b/gi) || []).length;
+  const present = (draft.match(/至今/g) || []).length + (draft.match(/\bPresent\b/gi) || []).length;
+  if (needed === 0 || present >= needed) return draft;
+
+  const sourceLines = source.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const anchors = [];
+  for (let i = 0; i < sourceLines.length; i++) {
+    const line = sourceLines[i];
+    if (!/至今/.test(line) && !/\bPresent\b/i.test(line)) continue;
+    const previous = sourceLines[i - 1] || "";
+    const context = previous && !/\d{4}\s*[./年]/.test(previous) ? previous : line;
+    const org = context.split(/[|｜]/).map((part) => part.trim()).filter(Boolean).pop() || context;
+    const name = org.replace(/\d{4}[./年]?\d{0,2}.*$/g, "").trim();
+    if (!name || name.length < 2 || /^(?:至今|迄今|Present)$/i.test(name)) continue;
+    let startDate = (line.match(/\d{4}\s*[./年]\s*\d{1,2}\s*月?/) || [])[0] || "";
+    if (!startDate) {
+      for (let k = i - 1; k >= Math.max(0, i - 4); k--) {
+        const match = sourceLines[k].match(/\d{4}\s*[./年]\s*\d{1,2}\s*月?|(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b\s*)?\d{4}\b/);
+        if (match) { startDate = match[0].trim(); break; }
+      }
+    }
+    anchors.push({ name, startDate });
+  }
+  if (anchors.length === 0) return draft;
+
+  let changed = false;
+  const lines = draft.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  for (const anchor of anchors) {
+    const index = lines.findIndex((line) => line.includes(anchor.name));
+    if (index < 0) continue;
+    const targetIndex = /\d{4}\s*[./年]/.test(lines[index]) ? index
+      : (lines[index + 1] && /\d{4}\s*[./年]/.test(lines[index + 1]) ? index + 1 : -1);
+    if (targetIndex < 0) {
+      lines[index] = `${lines[index].replace(/\s+$/, "")}${anchor.startDate ? ` | ${anchor.startDate}-至今` : " | 至今"}`;
+      changed = true;
+      continue;
+    }
+    const line = lines[targetIndex];
+    if (/至今/.test(line) || /\bPresent\b/i.test(line)) continue;
+    const range = line.match(/(\d{4}\s*[./年]\s*\d{1,2}\s*月?)\s*[-–—~至]\s*(\d{4}\s*[./年]\s*\d{1,2}\s*月?)\s*$/);
+    if (range) {
+      lines[targetIndex] = line.replace(/(\d{4}\s*[./年]\s*\d{1,2}\s*月?)\s*[-–—~至]\s*\d{4}\s*[./年]\s*\d{1,2}\s*月?\s*$/, (_, start) => `${start.trim()}-至今`);
+      changed = true;
+    }
+  }
+  return changed ? lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() : draft;
+}
+
 export function createDeepSeekClient(options = {}) {
   return createChatCompletionClient({
     provider: "deepseek",
