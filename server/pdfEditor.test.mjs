@@ -323,6 +323,25 @@ test("createGeneratedResumePdf uses the parsed candidate name instead of a gener
   }
 });
 
+test("createGeneratedResumePdf does not repeat the parsed name in the body", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-generated-no-duplicate-name-"));
+  try {
+    const result = await createGeneratedResumePdf({
+      text: "杜小艳\n核心优势\n具备内容运营与项目执行经验。",
+      candidateName: "杜小艳",
+      uploadDir
+    });
+    const parsed = await parseResumeFile({
+      buffer: await readFile(join(uploadDir, result.cleanOutputName)),
+      originalname: "generated-no-duplicate-name.pdf",
+      mimetype: "application/pdf"
+    });
+    assert.equal((parsed.text.match(/杜小艳/g) || []).length, 1);
+  } finally {
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
 test("createEditedPdfVersions can force the generated resume format", async () => {
   const uploadDir = await mkdtemp(join(tmpdir(), "resume-pdf-forced-generated-"));
   const sourceName = `forced-generated-${Date.now()}.pdf`;

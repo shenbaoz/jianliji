@@ -690,7 +690,13 @@ def create_generated_resume_pdf(payload, portrait=None):
         body_lines_all = lines[1:] if first_is_placeholder else lines
     else:
         body_lines_all = lines[1:] if has_header_name else lines
-    body_lines = [ln for ln in body_lines_all if not _is_personal_info_line(ln)]
+    normalized_name = normalize(name)
+    should_remove_duplicate_name = bool(requested_name or labeled_name or has_header_name)
+    body_lines = [
+        ln for ln in body_lines_all
+        if (not should_remove_duplicate_name or normalize(ln) != normalized_name)
+        and not _is_personal_info_line(ln)
+    ]
     section_names = {
         "核心优势", "个人优势", "教育背景", "教育经历", "实习经历", "工作经历", "项目经历",
         "校园经历", "校园实践经历", "实践经历", "技能", "技能关键词", "技能特长", "专业技能",
