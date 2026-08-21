@@ -57,7 +57,7 @@ export default function App() {
       }
       const preparedPdf = normalized.originalResumeFileUrl && /pdf/i.test(normalized.originalResumeMimeType || "")
         ? await createEditedPdfPreview(normalized.originalResumeFileUrl, refined.text, refined.changes || [])
-        : await createGeneratedPdf(refined.text, normalized.portraitDataUrl);
+        : await createGeneratedPdf(refined.text, normalized.portraitDataUrl, normalized.candidateName);
       setInput(normalized);
       setFollowUpQuestions([]);
       setFollowUpRounds(0);

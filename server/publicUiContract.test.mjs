@@ -107,7 +107,7 @@ test("from-zero flow accepts an optional portrait and sends it into generated PD
   ]);
   assert.match(types, /portraitDataUrl\?: string/);
   assert.match(start, /accept="image\/(?:jpeg|png)/);
-  assert.match(app, /createGeneratedPdf\(refined\.text, normalized\.portraitDataUrl\)/);
+  assert.match(app, /createGeneratedPdf\(refined\.text, normalized\.portraitDataUrl, normalized\.candidateName\)/);
   assert.match(pdfEditor, /portraitDataUrl/);
 });
 

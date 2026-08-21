@@ -615,7 +615,11 @@ def create_generated_resume_pdf(payload, portrait=None):
         if first_line[split_at].isspace():
             split_at += 1
         lines = [first_line[:split_at].strip(), first_line[split_at:].strip(), *lines[1:]]
-    # 1) 优先从全文任意一行找"姓名：XXX"（不只是第一行），避免用户把姓名写在中间导致错取
+    requested_name = normalize(str(payload.get("candidate_name") or "")).strip()
+    if requested_name in {"简历", "求职者", "未提供", "中文姓名", "姓名"}:
+        requested_name = ""
+    # 1) Prefer the name extracted from the uploaded resume. The AI text can
+    # start with generic labels such as "简历" or "求职者".
     labeled_name = None
     for line in lines:
         m = re.match(r"^姓\s*名\s*[:：]\s*(.+)$", line)
@@ -626,7 +630,10 @@ def create_generated_resume_pdf(payload, portrait=None):
     # "姓名：" 也属于元信息行，不应当成 standalone 姓名行
     is_meta_line = bool(re.match(r"^(?:求职目标|求职意向|目标岗位|联系方式|姓\s*名)\s*[:：]", first_line))
     # 姓名优先级：labeled_name(全文任意行"姓名：XXX") > 首行非元信息时的首段 > "求职者"
-    if labeled_name:
+    if requested_name:
+        name = requested_name
+        has_header_name = False
+    elif labeled_name:
         name = labeled_name.group(1).strip()
         has_header_name = True
     elif not is_meta_line and first_line:
@@ -678,7 +685,11 @@ def create_generated_resume_pdf(payload, portrait=None):
         if len(t) <= 3 and _PERSONAL_SINGLE_CHAR_RE.match(t):
             return True
         return False
-    body_lines_all = lines[1:] if has_header_name else lines
+    if requested_name:
+        first_is_placeholder = normalize(first_line) in {"简历", "求职者", "未提供", "中文姓名"}
+        body_lines_all = lines[1:] if first_is_placeholder else lines
+    else:
+        body_lines_all = lines[1:] if has_header_name else lines
     body_lines = [ln for ln in body_lines_all if not _is_personal_info_line(ln)]
     section_names = {
         "核心优势", "个人优势", "教育背景", "教育经历", "实习经历", "工作经历", "项目经历",

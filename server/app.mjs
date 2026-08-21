@@ -341,7 +341,8 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       const portraitDataUrl = typeof req.body?.portraitDataUrl === "string" && /^data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(req.body.portraitDataUrl) && req.body.portraitDataUrl.length <= 4_000_000
         ? req.body.portraitDataUrl
         : "";
-      const { cleanOutputName, portraitApplied } = await createGeneratedResumePdf({ text, portraitDataUrl, uploadDir });
+      const candidateName = typeof req.body?.candidateName === "string" ? req.body.candidateName.trim().slice(0, 80) : "";
+      const { cleanOutputName, portraitApplied } = await createGeneratedResumePdf({ text, portraitDataUrl, candidateName, uploadDir });
       const metadata = await registerStoredFile(uploadDir, cleanOutputName, {
         owner: visitorId,
         fileType: "pdf",

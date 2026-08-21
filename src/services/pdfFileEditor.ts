@@ -33,11 +33,11 @@ export async function createEditedPdfPreview(originalResumeFileUrl: string, text
   };
 }
 
-export async function createGeneratedPdf(text: string, portraitDataUrl?: string): Promise<PreparedPdf> {
+export async function createGeneratedPdf(text: string, portraitDataUrl?: string, candidateName?: string): Promise<PreparedPdf> {
   const response = await fetch(`${apiBase}/api/export-pdf`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...getVisitorHeaders() },
-    body: JSON.stringify({ text, portraitDataUrl })
+    body: JSON.stringify({ text, portraitDataUrl, candidateName })
   });
   const payload = (await response.json().catch(() => null)) as { fileUrl?: string; portraitApplied?: boolean; error?: string } | null;
   if (!response.ok || !payload?.fileUrl) throw new Error(payload?.error || "PDF 生成失败。");

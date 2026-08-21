@@ -303,6 +303,26 @@ test("createGeneratedResumePdf rejects an effectively empty AI draft", async () 
   await rm(uploadDir, { recursive: true, force: true });
 });
 
+test("createGeneratedResumePdf uses the parsed candidate name instead of a generic AI heading", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-generated-candidate-name-"));
+  try {
+    const result = await createGeneratedResumePdf({
+      text: "简历\n核心优势\n具备内容运营与项目执行经验，能够独立完成任务交付。",
+      candidateName: "WAI KWONG (CHARLES) LEE",
+      uploadDir
+    });
+    const parsed = await parseResumeFile({
+      buffer: await readFile(join(uploadDir, result.cleanOutputName)),
+      originalname: "generated-name.pdf",
+      mimetype: "application/pdf"
+    });
+    assert.match(parsed.text, /^WAI\s*KWONG\s*\(CHARLES\)\s*LEE/m);
+    assert.doesNotMatch(parsed.text, /^简历/m);
+  } finally {
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
 test("createEditedPdfVersions can force the generated resume format", async () => {
   const uploadDir = await mkdtemp(join(tmpdir(), "resume-pdf-forced-generated-"));
   const sourceName = `forced-generated-${Date.now()}.pdf`;
