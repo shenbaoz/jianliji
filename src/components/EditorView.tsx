@@ -7,8 +7,6 @@ import { downloadResumeWord } from "../services/wordExporter";
 import { saveExportFeedback } from "../services/storage";
 import type { SavedResumeVersion } from "../types";
 
-const EXPORT_UNLOCK_KEY = "jianliji_export_unlocked";
-
 interface EditorViewProps {
   currentVersion?: SavedResumeVersion;
 }
@@ -16,16 +14,9 @@ interface EditorViewProps {
 export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
   const [exportMessage, setExportMessage] = useState("");
   const [feedbackError, setFeedbackError] = useState("");
-  const [exportUnlocked, setExportUnlocked] = useState(() => {
-    try { return localStorage.getItem(EXPORT_UNLOCK_KEY) === "1"; } catch { return false; }
-  });
   const [gateAction, setGateAction] = useState<null | (() => void)>(null);
 
   const requestExport = (action: () => void) => {
-    if (exportUnlocked) {
-      action();
-      return;
-    }
     setGateAction(() => action);
   };
 
@@ -43,8 +34,6 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
       setFeedbackError(error instanceof Error ? error.message : "反馈提交失败，请稍后重试。");
       return;
     }
-    try { localStorage.setItem(EXPORT_UNLOCK_KEY, "1"); } catch { /* noop */ }
-    setExportUnlocked(true);
     const pending = gateAction;
     setGateAction(null);
     pending?.();
@@ -76,7 +65,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
       }
       const link = document.createElement("a");
       link.href = withDownloadFlag(preparedPdf.fileUrl);
-      link.download = "优化后简历.pdf";
+      link.download = "optimized-resume.pdf";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -94,7 +83,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
         : (/docx/i.test(originalResumeMimeType) && currentVersion?.originalResumeFileUrl
             ? { docxUrl: currentVersion.originalResumeFileUrl }
             : undefined);
-      void downloadResumeWord(generatedResumeText, "优化后简历.docx", source).then((usedOriginalLayout) => {
+      void downloadResumeWord(generatedResumeText, "resume.docx", source).then((usedOriginalLayout) => {
         setExportMessage(usedOriginalLayout ? "已保留原版式与照片。" : "已下载 Word。");
       });
     } catch {

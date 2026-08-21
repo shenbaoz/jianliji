@@ -25,6 +25,12 @@ test("export feedback shows the owner's WeChat contact", async () => {
   assert.match(editor, /navigator\.clipboard\.writeText/);
 });
 
+test("every export click opens the price feedback gate", async () => {
+  const editor = await read("src/components/EditorView.tsx");
+  assert.doesNotMatch(editor, /exportUnlocked/);
+  assert.match(editor, /const requestExport = \(action: \(\) => void\) => \{\s*setGateAction/);
+});
+
 test("final resume is read-only with PDF as the primary export", async () => {
   const editor = await read("src/components/EditorView.tsx");
   assert.match(editor, /成稿已整理完成/);
@@ -76,9 +82,9 @@ test("PDF export uses the attachment URL in the WeChat/mobile-safe path", async 
   assert.match(source, /window\.location\.assign\(withDownloadFlag\(preparedPdf\.fileUrl\)\)/);
 });
 
-test("PDF import export uses the generated resume format", async () => {
+test("PDF import export preserves the source layout when safe", async () => {
   const source = await read("src/services/pdfFileEditor.ts");
-  assert.match(source, /outputMode:\s*"generated-template"/);
+  assert.doesNotMatch(source, /outputMode:\s*"generated-template"/);
 });
 
 test("final export actions render visible download feedback", async () => {
@@ -90,6 +96,12 @@ test("final export actions render visible download feedback", async () => {
 test("generated PDF places the portrait above the header rule", async () => {
   const source = await read("server/vendor/pymupdf_official_replace.py");
   assert.match(source, /y\s*=\s*max\(y,\s*126\s*if\s*portrait\s*else\s*y\)/);
+});
+
+test("generated PDF keeps all source content while fitting one page", async () => {
+  const source = await read("server/vendor/pymupdf_official_replace.py");
+  assert.match(source, /generated resume must remain one page/);
+  assert.match(source, /coverage < 0\.55/);
 });
 
 test("footer exposes the required public security registration", async () => {
