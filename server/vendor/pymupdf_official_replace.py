@@ -627,10 +627,9 @@ def create_generated_resume_pdf(payload, portrait=None):
             personal_fields.append(f"{label}：{match.group(1).strip()}")
     if personal_fields:
         first_row = "　｜　".join(personal_fields[:4])
-        second_row = "　｜　".join(personal_fields[4:])
         page.insert_text((margin, 80), first_row, fontname=font_name, fontsize=8.5, color=(0.25, 0.31, 0.29))
-        if second_row:
-            page.insert_text((margin, 94), second_row, fontname=font_name, fontsize=8.5, color=(0.25, 0.31, 0.29))
+        for row_index, field in enumerate(personal_fields[4:]):
+            page.insert_text((margin, 94 + row_index * 13), field, fontname=font_name, fontsize=8.5, color=(0.25, 0.31, 0.29))
     y += 34
     y = max(y, 126 if portrait else y)
     page.draw_line((margin, y), (549, y), color=(0.08, 0.28, 0.24), width=1.5)
