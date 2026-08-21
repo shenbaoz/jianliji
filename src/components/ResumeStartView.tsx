@@ -90,10 +90,12 @@ export function ResumeStartView({ input, onChange, onGenerate, isGenerating, fol
     </section>;
   }
   return <section className="start-choose">
-    <h1 className="start-choose-title">选择开始方式</h1>
+    <div className="start-choose-head"><span className="start-choose-index">01</span><span className="start-choose-kicker">开始一份简历</span></div>
+    <div className="start-choose-intro"><div><h1 className="start-choose-title">选择你的<br /><em>开始方式。</em></h1></div><p className="start-choose-desc">从已有简历开始，或从真实经历开始。我们会帮你整理成一份更适合投递的版本。</p></div>
     <div className="start-choose-grid">
-      <button type="button" onClick={() => setMode("optimize")} className="start-choose-card start-choose-card-optimize"><strong>已有简历</strong><span>上传文件后自动整理。</span><small className="start-choose-card-meta">PDF / DOCX / TXT</small></button>
-      <button type="button" onClick={() => setMode("create")} className="start-choose-card start-choose-card-create"><strong>从零创建</strong><span>填写目标方向和真实经历。</span><small className="start-choose-card-meta">适合还没有完整简历的人</small></button>
+      <button type="button" onClick={() => setMode("optimize")} className="start-choose-card start-choose-card-optimize"><div className="start-choose-card-top"><span className="start-choose-card-index">01</span><FileText size={23} strokeWidth={1.5} /></div><div className="start-choose-card-copy"><strong>已有简历</strong><span>上传文件后自动整理。</span></div><div className="start-choose-card-bottom"><small>PDF / DOCX / TXT</small><b aria-hidden="true">↗</b></div></button>
+      <button type="button" onClick={() => setMode("create")} className="start-choose-card start-choose-card-create"><div className="start-choose-card-top"><span className="start-choose-card-index">02</span><Sparkles size={23} strokeWidth={1.5} /></div><div className="start-choose-card-copy"><strong>从零创建</strong><span>填写目标方向和真实经历。</span></div><div className="start-choose-card-bottom"><small>适合还没有完整简历的人</small><b aria-hidden="true">↗</b></div></button>
     </div>
+    <div className="start-choose-footer"><span>简历记 / RESUME NOTE</span><span>你的内容只属于你</span></div>
   </section>;
 }
