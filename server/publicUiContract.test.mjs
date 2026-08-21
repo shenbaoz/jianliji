@@ -98,6 +98,27 @@ test("generated PDF places the portrait above the header rule", async () => {
   assert.match(source, /y\s*=\s*max\(y,\s*126\s*if\s*portrait\s*else\s*y\)/);
 });
 
+test("from-zero flow accepts an optional portrait and sends it into generated PDF export", async () => {
+  const [types, start, app, pdfEditor] = await Promise.all([
+    read("src/types.ts"),
+    read("src/components/ResumeStartView.tsx"),
+    read("src/App.tsx"),
+    read("src/services/pdfFileEditor.ts")
+  ]);
+  assert.match(types, /portraitDataUrl\?: string/);
+  assert.match(start, /accept="image\/(?:jpeg|png)/);
+  assert.match(app, /createGeneratedPdf\(refined\.text, normalized\.portraitDataUrl\)/);
+  assert.match(pdfEditor, /portraitDataUrl/);
+});
+
+test("all export actions remain behind the price and feedback gate", async () => {
+  const editor = await read("src/components/EditorView.tsx");
+  assert.match(editor, /onClick=\{\(\) => requestExport\(handleDownloadPdf\)\}/);
+  assert.match(editor, /onClick=\{\(\) => requestExport\(handleDownloadWord\)\}/);
+  assert.match(editor, /提交并免费下载/);
+  assert.match(editor, /哪里让你觉得值，或不值/);
+});
+
 test("generated PDF keeps all source content while fitting one page", async () => {
   const source = await read("server/vendor/pymupdf_official_replace.py");
   assert.match(source, /generated resume must remain one page/);

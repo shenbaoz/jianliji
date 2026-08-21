@@ -33,13 +33,13 @@ export async function createEditedPdfPreview(originalResumeFileUrl: string, text
   };
 }
 
-export async function createGeneratedPdf(text: string): Promise<PreparedPdf> {
+export async function createGeneratedPdf(text: string, portraitDataUrl?: string): Promise<PreparedPdf> {
   const response = await fetch(`${apiBase}/api/export-pdf`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...getVisitorHeaders() },
-    body: JSON.stringify({ text })
+    body: JSON.stringify({ text, portraitDataUrl })
   });
-  const payload = (await response.json().catch(() => null)) as { fileUrl?: string; error?: string } | null;
+  const payload = (await response.json().catch(() => null)) as { fileUrl?: string; portraitApplied?: boolean; error?: string } | null;
   if (!response.ok || !payload?.fileUrl) throw new Error(payload?.error || "PDF 生成失败。");
   const fileUrl = resolveApiUrl(payload.fileUrl);
   return {
@@ -48,7 +48,8 @@ export async function createGeneratedPdf(text: string): Promise<PreparedPdf> {
     changedLineCount: 0,
     appliedChanges: [],
     deliveryMode: "generated-template",
-    portraitApplied: false
+    portraitApplied: payload.portraitApplied === true,
+    portraitDataUrl: payload.portraitApplied === true ? portraitDataUrl : undefined
   };
 }
 

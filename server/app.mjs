@@ -338,14 +338,17 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
         res.status(413).json({ error: "成品简历内容过长，请精简后重试。" });
         return;
       }
-      const { cleanOutputName } = await createGeneratedResumePdf({ text, uploadDir });
+      const portraitDataUrl = typeof req.body?.portraitDataUrl === "string" && /^data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(req.body.portraitDataUrl) && req.body.portraitDataUrl.length <= 4_000_000
+        ? req.body.portraitDataUrl
+        : "";
+      const { cleanOutputName, portraitApplied } = await createGeneratedResumePdf({ text, portraitDataUrl, uploadDir });
       const metadata = await registerStoredFile(uploadDir, cleanOutputName, {
         owner: visitorId,
         fileType: "pdf",
         mimeType: "application/pdf",
         originalName: "优化后简历.pdf"
       });
-      res.status(201).json({ fileUrl: storedFileUrl(cleanOutputName, metadata.token) });
+      res.status(201).json({ fileUrl: storedFileUrl(cleanOutputName, metadata.token), portraitApplied });
     } catch (error) {
       next(error);
     }

@@ -77,7 +77,7 @@ export async function createEditedPdf(options) {
   return cleanOutputName;
 }
 
-export async function createGeneratedResumePdf({ text, uploadDir = defaultUploadDir }) {
+export async function createGeneratedResumePdf({ text, portraitDataUrl, uploadDir = defaultUploadDir }) {
   const lines = getResumeLines(text);
   if (!lines.length) throw new Error("成品文字不能为空。");
   const cleanOutputName = `${randomUUID()}.pdf`;
@@ -89,10 +89,11 @@ export async function createGeneratedResumePdf({ text, uploadDir = defaultUpload
       clean_path: join(uploadDir, cleanOutputName),
       review_path: reviewPath,
       font_path: await findChineseFontPath(),
-      optimized_text: text
+      optimized_text: text,
+      portrait_data_url: portraitDataUrl || ""
     });
     if (result.textVerified !== true) throw new Error("成品 PDF 文字校验失败。");
-    return { cleanOutputName };
+    return { cleanOutputName, portraitApplied: result.portraitApplied === true };
   } finally {
     await rm(reviewPath, { force: true });
   }

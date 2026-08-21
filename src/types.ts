@@ -39,6 +39,7 @@ export type ResumeInput = {
   originalResumeMimeType?: string;
   originalResumeFileUrl?: string;
   originalResumeDataUrl?: string;
+  portraitDataUrl?: string;
 };
 
 export type ResumeTemplate = {

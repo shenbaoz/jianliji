@@ -64,6 +64,19 @@ def extract_source_portrait(source_path):
     return {"bytes": image_bytes, "data_url": f"data:image/{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"}
 
 
+def decode_portrait_data_url(value):
+    match = re.match(r"^data:image/(jpeg|png);base64,([A-Za-z0-9+/=]+)$", str(value or ""))
+    if not match:
+        return None
+    try:
+        image_bytes = base64.b64decode(match.group(2), validate=True)
+        if not image_bytes or len(image_bytes) > 1_500_000:
+            return None
+        return {"bytes": image_bytes, "data_url": str(value)}
+    except (ValueError, base64.binascii.Error):
+        return None
+
+
 def rect_key(rect):
     return tuple(round(float(value), 3) for value in rect)
 
@@ -738,7 +751,7 @@ def create_generated_resume_pdf(payload, portrait=None):
 if __name__ == "__main__":
     request = json.load(sys.stdin)
     if request.get("force_generated"):
-        portrait = extract_source_portrait(request["source_path"]) if request.get("source_path") else None
+        portrait = decode_portrait_data_url(request.get("portrait_data_url")) or (extract_source_portrait(request["source_path"]) if request.get("source_path") else None)
         result = {
             "changedLineCount": 0,
             "appliedChanges": [],
