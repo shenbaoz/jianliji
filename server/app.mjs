@@ -274,7 +274,9 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       res.setHeader("Content-Security-Policy", "frame-ancestors 'self'; object-src 'none'; base-uri 'none'");
       res.setHeader("Content-Type", metadata.mimeType);
       const disposition = req.query.download === "1" ? "attachment" : "inline";
-      res.setHeader("Content-Disposition", `${disposition}; filename*=UTF-8''${encodeURIComponent(metadata.originalName || req.params.name)}`);
+      const originalName = metadata.originalName || req.params.name;
+      const asciiFallback = /\.docx$/i.test(originalName) ? "resume.docx" : /\.txt$/i.test(originalName) ? "resume.txt" : "optimized-resume.pdf";
+      res.setHeader("Content-Disposition", `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(originalName)}`);
       res.sendFile(join(uploadDir, req.params.name));
     } catch (error) {
       if (error?.code === "ENOENT") {

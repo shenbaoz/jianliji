@@ -290,7 +290,7 @@ test("text resumes can be exported as a token-protected PDF without browser prin
 
     const download = await fetch(`${baseUrl}${payload.fileUrl}&download=1`);
     assert.equal(download.status, 200);
-    assert.match(download.headers.get("content-disposition") || "", /^attachment;/);
+    assert.match(download.headers.get("content-disposition") || "", /^attachment; filename="optimized-resume\.pdf"; filename\*=UTF-8''/);
   } finally {
     server.closeAllConnections?.();
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));

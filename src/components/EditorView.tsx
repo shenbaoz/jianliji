@@ -228,13 +228,26 @@ function ChangeCompareCard({ changes }: { changes: Array<{ before: string; after
 function ExportGateDialog({ onCancel, onUnlock, error }: { onCancel: () => void; onUnlock: (priceChoice: string, note: string) => void; error: string }) {
   const [priceChoice, setPriceChoice] = useState("");
   const [note, setNote] = useState("");
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+
+  const copyWechat = async () => {
+    try {
+      await navigator.clipboard.writeText("18142560091");
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 1800);
+    } catch {
+      setCopyState("failed");
+      window.setTimeout(() => setCopyState("idle"), 2200);
+    }
+  };
+
   return (
     <div className="export-gate-overlay" role="dialog" aria-modal="true" aria-label="导出前反馈引导">
       <div className="export-gate-card">
         <p className="export-gate-kicker">当前免费</p>
         <h2>想听你的判断</h2>
         <p className="export-gate-note">如果这份简历收费，你愿意付多少？</p>
-        <p className="export-gate-contact">微信：<strong>18142560091</strong><button type="button" onClick={() => void navigator.clipboard?.writeText("18142560091")} aria-label="复制微信号">复制</button></p>
+        <p className="export-gate-contact">微信：<strong>18142560091</strong><button type="button" onClick={() => void copyWechat()} aria-label="复制微信号">{copyState === "copied" ? "已复制" : copyState === "failed" ? "复制失败" : "复制"}</button></p>
         <div className="export-gate-actions export-gate-price-options" role="radiogroup" aria-label="付费意愿">
           {[
             ["not-willing", "不愿意付费"],

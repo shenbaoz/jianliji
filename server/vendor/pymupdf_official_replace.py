@@ -672,6 +672,7 @@ def create_generated_resume_pdf(payload, portrait=None):
 if __name__ == "__main__":
     request = json.load(sys.stdin)
     if request.get("force_generated"):
+        portrait = extract_source_portrait(request["source_path"]) if request.get("source_path") else None
         result = {
             "changedLineCount": 0,
             "appliedChanges": [],
@@ -679,7 +680,7 @@ if __name__ == "__main__":
             "pageCountVerified": True,
             "deliveryMode": "generated-template",
         }
-        result.update(create_generated_resume_pdf(request))
+        result.update(create_generated_resume_pdf(request, portrait))
     else:
         result = create_versions(request)
     if not request.get("force_generated") and result["changedLineCount"] == 0:

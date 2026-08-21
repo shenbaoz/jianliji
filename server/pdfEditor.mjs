@@ -39,7 +39,7 @@ async function findChineseFontPath() {
     "未找到可用的中文字体文件。请通过环境变量 CHINESE_FONT_PATH 指定字体路径，或将字体文件放到 data/fonts/ 目录。"
   );
 }
-export async function createEditedPdfVersions({ originalResumeFileUrl, text, changes = [], uploadDir = defaultUploadDir }) {
+export async function createEditedPdfVersions({ originalResumeFileUrl, text, changes = [], outputMode = "auto", uploadDir = defaultUploadDir }) {
   const sourceName = getUploadFileName(originalResumeFileUrl);
   const sourcePath = join(uploadDir, sourceName);
   const lines = getResumeLines(text);
@@ -53,7 +53,8 @@ export async function createEditedPdfVersions({ originalResumeFileUrl, text, cha
     review_path: join(uploadDir, reviewOutputName),
     font_path: await findChineseFontPath(),
     changes: pendingChanges,
-    optimized_text: text
+    optimized_text: text,
+    force_generated: outputMode === "generated-template"
   });
   if (result.pageCountVerified !== true) {
     throw new Error("PDF 精修失败：成品页数未通过校验。");

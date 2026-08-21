@@ -21,6 +21,8 @@ test("export feedback shows the owner's WeChat contact", async () => {
   const editor = await read("src/components/EditorView.tsx");
   assert.match(editor, /微信/);
   assert.match(editor, /18142560091/);
+  assert.match(editor, /复制成功|已复制/);
+  assert.match(editor, /navigator\.clipboard\.writeText/);
 });
 
 test("final resume is read-only with PDF as the primary export", async () => {
@@ -61,6 +63,7 @@ test("export feedback dialog is compact and centered without a white card", asyn
   assert.match(source, /\.public-editorial-shell \.export-gate-overlay\s*\{[^}]*place-items:\s*center/);
   assert.match(source, /\.public-editorial-shell \.export-gate-card\s*\{[^}]*background:\s*#fff/);
   assert.match(source, /\.public-editorial-shell \.export-gate-card\s*\{[^}]*width:\s*min\(360px/);
+  assert.match(source, /\.public-editorial-shell \.export-gate-overlay\s*\{[^}]*position:\s*fixed/);
 });
 
 test("PDF import preview does not eagerly duplicate the whole file as a data URL", async () => {
@@ -71,4 +74,9 @@ test("PDF import preview does not eagerly duplicate the whole file as a data URL
 test("PDF export uses the attachment URL in the WeChat/mobile-safe path", async () => {
   const source = await read("src/components/EditorView.tsx");
   assert.match(source, /window\.location\.assign\(withDownloadFlag\(preparedPdf\.fileUrl\)\)/);
+});
+
+test("PDF import export uses the generated resume format", async () => {
+  const source = await read("src/services/pdfFileEditor.ts");
+  assert.match(source, /outputMode:\s*"generated-template"/);
 });

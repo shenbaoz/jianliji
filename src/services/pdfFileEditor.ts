@@ -10,7 +10,7 @@ export async function createEditedPdfPreview(originalResumeFileUrl: string, text
   const response = await fetch(`${apiBase}/api/edit-pdf`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...getVisitorHeaders() },
-    body: JSON.stringify({ originalResumeFileUrl, text, changes })
+    body: JSON.stringify({ originalResumeFileUrl, text, changes, outputMode: "generated-template" })
   });
   const payload = (await response.json().catch(() => null)) as { fileUrl?: string; reviewFileUrl?: string; changedLineCount?: number; appliedChanges?: Array<{ before?: unknown; after?: unknown }>; deliveryMode?: PdfDeliveryMode; portraitApplied?: boolean; portraitDataUrl?: string; error?: string } | null;
   if (!response.ok || !payload?.fileUrl || !payload.reviewFileUrl || !payload.deliveryMode) {

@@ -243,6 +243,29 @@ test("createGeneratedResumePdf keeps labeled names clean and uses printable list
   }
 });
 
+test("createEditedPdfVersions can force the generated resume format", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-pdf-forced-generated-"));
+  const sourceName = `forced-generated-${Date.now()}.pdf`;
+  await writeFile(join(uploadDir, sourceName), await createPdfBuffer(["原始简历内容"]));
+  try {
+    const result = await createEditedPdfVersions({
+      originalResumeFileUrl: `/api/resume-files/${sourceName}`,
+      text: "测试用户\n核心优势\n- 独立完成内容运营。",
+      outputMode: "generated-template",
+      uploadDir
+    });
+    assert.equal(result.deliveryMode, "generated-template");
+    const parsed = await parseResumeFile({
+      buffer: await readFile(join(uploadDir, result.cleanOutputName)),
+      originalname: "generated.pdf",
+      mimetype: "application/pdf"
+    });
+    assert.match(parsed.text.replace(/\s+/g, ""), /测试用户.*独立完成内容运营/);
+  } finally {
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
 function countImageResources(pdf) {
   return pdf.getPages().reduce((total, page) => {
     const resources = page.node.Resources();
