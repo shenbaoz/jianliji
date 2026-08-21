@@ -2086,6 +2086,9 @@ body:has(.apple-style-home) { overflow-y: hidden; }
 .public-editorial-shell .editor-shell { padding-top: 70px; }
 .public-editorial-shell .editor-shell > div { max-width: 1160px; }
 .public-editorial-shell .editor-shell h1 { color: #202a33; font-family: "Noto Serif SC", "Songti SC", serif; font-size: clamp(46px, 5.5vw, 74px); font-weight: 500; letter-spacing: -.08em; }
+.public-editorial-shell .editor-shell > div > .mb-5 > .flex > div:first-child { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.public-editorial-shell .editor-shell > div > .mb-5 > .flex > div:first-child h1 { margin: 0; line-height: 1.08; }
+.public-editorial-shell .editor-shell > div > .mb-5 > .flex > div:first-child p { margin: 0; line-height: 1.7; }
 .public-editorial-shell .editor-document-panel { border-radius: 4px; background: #e8ebeb !important; }
 .public-editorial-shell .editor-header-actions button { min-height: 42px; border-radius: 3px !important; }
 .public-editorial-shell .editor-header-actions button:first-child { background: #263e52 !important; }
@@ -2113,3 +2116,88 @@ body:has(.apple-style-home) { overflow-y: hidden; }
 .public-editorial-shell .apple-style-home { background: var(--premium-paper); }
 .public-editorial-shell .apple-page-copy h1 em { color: var(--premium-pine); }
 .public-editorial-shell .apple-page-copy button { background: var(--premium-ink); }
+
+/* Final homepage correction: remove the old multicolour light-band treatment. */
+.editorial-light-band,
+.page-shell .workspace-heading::after { display: none !important; }
+.public-editorial-shell .editorial-hero-canvas {
+  border: 1px solid #dedbd3;
+  border-radius: 24px;
+  background: #f4f1eb;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.7);
+}
+.public-editorial-shell .editorial-hero-canvas h1 {
+  max-width: 760px;
+  color: #242624;
+  font-weight: 500;
+}
+.public-editorial-shell .editorial-description { color: #747771; }
+
+/* Homepage: quiet editorial composition, with the resume treated as the product. */
+.public-editorial-shell .apple-style-home { background: #f7f6f2; }
+.public-editorial-shell .apple-hero-page {
+  grid-template-columns: minmax(320px, .82fr) minmax(420px, 1.18fr);
+  gap: clamp(38px, 7vw, 112px);
+  padding: 34px clamp(28px, 7vw, 112px) 0;
+  text-align: left;
+}
+.public-editorial-shell .apple-page-copy { align-self: center; max-width: 520px; }
+.public-editorial-shell .apple-eyebrow {
+  width: fit-content;
+  margin-bottom: 28px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #b7c3bb;
+  color: #2d5148;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .16em;
+}
+.public-editorial-shell .apple-page-copy h1 {
+  color: #242624;
+  font-size: clamp(48px, 5.3vw, 76px);
+  font-weight: 500;
+  letter-spacing: -.075em;
+  line-height: 1.08;
+}
+.public-editorial-shell .apple-page-copy h1 em { color: #2d5148; }
+.public-editorial-shell .apple-page-copy p {
+  max-width: 340px;
+  margin: 28px 0 0;
+  color: #747771;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.public-editorial-shell .apple-page-copy button {
+  margin-top: 34px;
+  border-radius: 4px;
+  background: #203d36;
+  padding: 14px 22px;
+  font-size: 13px;
+  letter-spacing: .02em;
+}
+.public-editorial-shell .apple-page-copy button:hover { background: #2d5148; }
+.public-editorial-shell .apple-resume-visual {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  align-self: center;
+  width: min(560px, 100%);
+  height: min(620px, calc(100vh - 136px));
+  min-height: 470px;
+  transform: rotate(2.2deg);
+  background: #fffefa;
+  box-shadow: 18px 24px 0 #e5e1d8, 0 28px 70px rgba(40,48,43,.12);
+}
+.public-editorial-shell .resume-stage-shadow { display: none; }
+@media (max-width: 760px) {
+  .public-editorial-shell .apple-hero-page { display: block; padding: 58px 24px 0; }
+  .public-editorial-shell .apple-page-copy h1 { font-size: 48px; }
+  .public-editorial-shell .apple-page-copy p { font-size: 14px; }
+  .public-editorial-shell .apple-resume-visual {
+    width: 92vw;
+    height: 330px;
+    min-height: 330px;
+    margin: 54px auto 0;
+    transform: rotate(1.5deg) translateY(40px);
+  }
+}
