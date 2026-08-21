@@ -1798,6 +1798,16 @@ button.admin-module-card {
   letter-spacing: 0.08em;
   color: #9a988f;
 }
+.site-footer-record {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #71706b;
+  font-size: 12px;
+  text-decoration: none;
+}
+.site-footer-record:hover { color: #202022; }
+.site-footer-record img { width: 16px; height: 16px; object-fit: contain; }
 @media (max-width: 560px) {
   .site-footer { padding: 16px 16px 20px; }
   .site-footer-inner { flex-direction: column; align-items: flex-start; gap: 10px; }

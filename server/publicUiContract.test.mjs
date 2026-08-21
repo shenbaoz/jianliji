@@ -91,3 +91,10 @@ test("generated PDF places the portrait above the header rule", async () => {
   const source = await read("server/vendor/pymupdf_official_replace.py");
   assert.match(source, /y\s*=\s*max\(y,\s*126\s*if\s*portrait\s*else\s*y\)/);
 });
+
+test("footer exposes the required public security registration", async () => {
+  const footer = await read("src/components/Footer.tsx");
+  assert.match(footer, /beian\.mps\.gov\.cn\/\#\/query\/webSearch\?code=51070302110762/);
+  assert.match(footer, /川公网安备51070302110762号/);
+  assert.match(footer, /备案图标\.png/);
+});
