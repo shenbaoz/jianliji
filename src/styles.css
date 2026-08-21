@@ -473,6 +473,20 @@ h3 {
   letter-spacing: 0.08em;
 }
 
+/* Recommended deliverable layout: one-page, single-column reading flow. */
+.resume-document-body { gap: 13px; margin-top: 18px; }
+.resume-section { display: block; }
+.resume-section h3 {
+  border-top: 0;
+  border-left: 4px solid var(--resume-accent);
+  background: color-mix(in srgb, var(--resume-accent) 9%, white);
+  padding: 4px 8px;
+  font-size: 14px;
+}
+.resume-section-content { padding-top: 6px; }
+.resume-section p { margin-bottom: 4px; font-size: 12px; line-height: 1.48; }
+.resume-entry-title { margin-top: 6px !important; }
+
 .resume-template-business .resume-section h3 {
   color: #2f3a4a;
   border-top-color: #2f3a4a;

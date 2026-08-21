@@ -102,6 +102,13 @@ test("generated PDF keeps all source content while fitting one page", async () =
   const source = await read("server/vendor/pymupdf_official_replace.py");
   assert.match(source, /generated resume must remain one page/);
   assert.match(source, /coverage < 0\.55/);
+  assert.doesNotMatch(source, /columns\s*=|column_index/);
+});
+
+test("editor preview uses the recommended single-column reading flow", async () => {
+  const styles = await read("src/styles.css");
+  assert.match(styles, /Recommended deliverable layout: one-page, single-column reading flow/);
+  assert.match(styles, /\.resume-section\s*\{\s*display:\s*block;/);
 });
 
 test("footer exposes the required public security registration", async () => {

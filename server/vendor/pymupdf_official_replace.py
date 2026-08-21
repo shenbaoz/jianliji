@@ -636,29 +636,34 @@ def create_generated_resume_pdf(payload, portrait=None):
         return False
     body_lines_all = lines[1:] if has_header_name else lines
     body_lines = [ln for ln in body_lines_all if not _is_personal_info_line(ln)]
-    columns = [(margin, 288), (307, 549)]
-    column_index = 0
-    y = 148
+    section_names = {"核心优势", "教育背景", "实习经历", "工作经历", "项目经历", "校园经历", "技能", "技能特长", "专业技能", "荣誉", "证书"}
+    date_line = re.compile(r"^(?:19|20)\d{2}[.年/\-]")
+    merged_body_lines = []
+    for body_line in body_lines:
+        current = body_line.strip()
+        starts_block = normalize(current) in section_names or date_line.match(current) or current.startswith(("-", "•", "·", "", "▪", "◦", "●", "○"))
+        if merged_body_lines and not starts_block:
+            merged_body_lines[-1] = f"{merged_body_lines[-1]} {current}".strip()
+        else:
+            merged_body_lines.append(current)
+    body_lines = merged_body_lines
+    y = 138
     for original_line in body_lines:
-        heading = normalize(original_line) in {"核心优势", "教育背景", "实习经历", "工作经历", "项目经历", "校园经历", "技能", "技能特长", "专业技能", "荣誉", "证书"}
-        wrapped = generated_lines(original_line, 27)
-        needed = (18 if heading else 0) + len(wrapped) * 14 + 2
-        if y + needed > 810:
-            column_index += 1
-            y = 148
-        if column_index >= len(columns):
+        heading = normalize(original_line) in section_names
+        wrapped = generated_lines(original_line, 64)
+        needed = (14 if heading else 0) + len(wrapped) * 13 + 2
+        if y + needed > 828:
             raise RuntimeError("generated resume exceeds the one-page layout")
-        column_left, column_right = columns[column_index]
         if heading:
-            page.draw_rect((column_left, y, column_right, y + 15), color=None, fill=(0.91, 0.95, 0.93), overlay=True)
-            page.insert_text((column_left + 5, y + 11), original_line, fontname=font_name, fontsize=9.5, color=(0.08, 0.28, 0.24))
-            y += 18
+            page.draw_rect((margin, y, 549, y + 13), color=None, fill=(0.91, 0.95, 0.93), overlay=True)
+            page.insert_text((margin + 5, y + 10), original_line, fontname=font_name, fontsize=8.5, color=(0.08, 0.28, 0.24))
+            y += 14
             continue
         for line, _ in wrapped:
-            spare = page.insert_textbox((column_left, y, column_right, y + 14), line, fontname=font_name, fontsize=8.5, color=(0.08, 0.10, 0.10), lineheight=1.0)
+            spare = page.insert_textbox((margin, y, 549, y + 13), line, fontname=font_name, fontsize=7, color=(0.08, 0.10, 0.10), lineheight=1.0)
             if spare < 0:
                 raise RuntimeError("generated resume line did not fit")
-            y += 14
+            y += 13
         y += 2
 
     document.save(payload["clean_path"], garbage=4, deflate=True)
