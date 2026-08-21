@@ -80,3 +80,14 @@ test("PDF import export uses the generated resume format", async () => {
   const source = await read("src/services/pdfFileEditor.ts");
   assert.match(source, /outputMode:\s*"generated-template"/);
 });
+
+test("final export actions render visible download feedback", async () => {
+  const editor = await read("src/components/EditorView.tsx");
+  assert.match(editor, /exportMessage &&/);
+  assert.match(editor, /role="status"/);
+});
+
+test("generated PDF places the portrait above the header rule", async () => {
+  const source = await read("server/vendor/pymupdf_official_replace.py");
+  assert.match(source, /y\s*=\s*max\(y,\s*126\s*if\s*portrait\s*else\s*y\)/);
+});

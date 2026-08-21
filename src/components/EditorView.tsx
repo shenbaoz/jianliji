@@ -123,6 +123,7 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
             </div>
           </div>
         </div>
+        {exportMessage && <div className="app-toast" role="status">{exportMessage}</div>}
         <OptimizationHighlightsCard highlights={currentVersion?.highlights} />
         <ChangeCompareCard changes={resumeChanges} />
         <div className="editor-document-panel border border-slate-200 p-4 sm:p-8">

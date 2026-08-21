@@ -613,6 +613,7 @@ def create_generated_resume_pdf(payload, portrait=None):
     if portrait:
         page.insert_image(pymupdf.Rect(478, 38, 537, 112), stream=portrait["bytes"], keep_proportion=True)
     y += 34
+    y = max(y, 126 if portrait else y)
     page.draw_line((margin, y), (549, y), color=(0.08, 0.28, 0.24), width=1.5)
     y += 22
 
