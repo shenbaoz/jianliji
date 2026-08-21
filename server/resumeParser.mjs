@@ -250,7 +250,8 @@ function extractCandidateName(text) {
 
 function extractBasicInfo(text, candidateName) {
   const source = String(text || "");
-  const school = source.match(/([\u4e00-\u9fff]{2,16}(?:大学|学院))/)?.[1] || "";
+  const inlineEducationMatch = source.match(/(?:教育背景|教育经历|毕业院校|学校)\s*[:：]?\s*([\u4e00-\u9fff]{2,16}(?:大学|学院))/);
+  const school = inlineEducationMatch?.[1] || source.match(/([\u4e00-\u9fff]{2,16}(?:大学|学院))/)?.[1] || "";
   const degree = source.match(/(?:高中|大专|本科|硕士|博士)/)?.[0] || "";
   const educationWindow = school ? source.slice(source.indexOf(school) + school.length, source.indexOf(school) + school.length + 100) : "";
   const major = educationWindow.match(/([\u4e00-\u9fff]{2,20})\s*[/｜|]\s*(?:高中|大专|本科|硕士|博士)/)?.[1] || "";

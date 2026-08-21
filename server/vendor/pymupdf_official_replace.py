@@ -697,8 +697,10 @@ def create_generated_resume_pdf(payload, portrait=None):
             page.insert_text((margin + 5, y + 10), original_line, fontname=font_name, fontsize=8.5, color=(0.08, 0.28, 0.24))
             y += 14
             continue
+        if entry:
+            page.draw_line((margin, y + 11), (min(549, margin + 118), y + 11), color=(0.08, 0.28, 0.24), width=0.65, overlay=True)
         for line, _ in wrapped:
-            spare = page.insert_textbox((margin, y, 549, y + 13), line, fontname=font_name, fontsize=7.2 if entry else 7, color=(0.08, 0.10, 0.10), lineheight=1.0)
+            spare = page.insert_textbox((margin, y, 549, y + 13), line, fontname=font_name, fontsize=7.6 if entry else 7, color=(0.08, 0.20, 0.18) if entry else (0.08, 0.10, 0.10), lineheight=1.0)
             if spare < 0:
                 raise RuntimeError("generated resume line did not fit")
             y += 13

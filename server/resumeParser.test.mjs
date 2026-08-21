@@ -14,6 +14,16 @@ test("parseResumeFile extracts text files", async () => {
   assert.equal(result.text, "张三\n前端工程师\nReact 项目经验");
 });
 
+test("parseResumeFile strips an inline education heading from the school name", async () => {
+  const result = await parseResumeFile({
+    originalname: "inline-education.txt",
+    mimetype: "text/plain",
+    buffer: Buffer.from("沈保自\n教育背景四川大学锦江学院\n四川大学锦江学院 | 计算机科学与技术 | 本科", "utf8")
+  });
+
+  assert.equal(result.basicInfo.school, "四川大学锦江学院");
+});
+
 test("parseResumeFile extracts PDF files", async () => {
   const buffer = await createPdfBuffer("Resume Candidate\nFrontend Engineer\nReact and TypeScript");
 
