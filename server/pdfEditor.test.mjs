@@ -243,6 +243,31 @@ test("createGeneratedResumePdf keeps labeled names clean and uses printable list
   }
 });
 
+test("createGeneratedResumePdf keeps a long one-page draft readable without dropping content", async () => {
+  const uploadDir = await mkdtemp(join(tmpdir(), "resume-generated-long-export-"));
+  const longText = [
+    "杜小艳",
+    "核心优势",
+    ...Array.from({ length: 55 }, (_, index) => `${2024 + (index % 3)}.${String((index % 12) + 1).padStart(2, "0")}｜负责活动运营与内容策划，完成用户触达、社群维护、数据复盘和素材优化，持续提升活动效果与内容传播质量。`),
+    "荣誉奖项",
+    "第十三届全国大学生新媒体创意大赛《美丽中国》融媒刊创作二等奖"
+  ].join("\n");
+  try {
+    const result = await createGeneratedResumePdf({ text: longText, uploadDir });
+    const parsed = await parseResumeFile({
+      buffer: await readFile(join(uploadDir, result.cleanOutputName)),
+      originalname: "generated-long.pdf",
+      mimetype: "application/pdf"
+    });
+    assert.match(parsed.text, /杜小艳/);
+    assert.match(parsed.text, /融媒刊创作二等奖/);
+    const pdf = await PdfLibDocument.load(await readFile(join(uploadDir, result.cleanOutputName)));
+    assert.equal(pdf.getPageCount(), 1);
+  } finally {
+    await rm(uploadDir, { recursive: true, force: true });
+  }
+});
+
 test("createEditedPdfVersions can force the generated resume format", async () => {
   const uploadDir = await mkdtemp(join(tmpdir(), "resume-pdf-forced-generated-"));
   const sourceName = `forced-generated-${Date.now()}.pdf`;
