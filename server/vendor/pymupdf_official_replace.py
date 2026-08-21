@@ -654,20 +654,40 @@ def create_generated_resume_pdf(payload, portrait=None):
         return False
     body_lines_all = lines[1:] if has_header_name else lines
     body_lines = [ln for ln in body_lines_all if not _is_personal_info_line(ln)]
-    section_names = {"核心优势", "教育背景", "实习经历", "工作经历", "项目经历", "校园经历", "技能", "技能特长", "专业技能", "荣誉", "证书"}
-    date_line = re.compile(r"^(?:19|20)\d{2}[.年/\-]")
-    merged_body_lines = []
+    section_names = {
+        "核心优势", "个人优势", "教育背景", "教育经历", "实习经历", "工作经历", "项目经历",
+        "校园经历", "校园实践经历", "实践经历", "技能", "技能关键词", "技能特长", "专业技能",
+        "专业技能与工具", "荣誉", "荣誉奖项", "获奖经历", "奖项荣誉", "证书"
+    }
+    section_token = re.compile(r"(?<![\u4e00-\u9fff])(" + "|".join(re.escape(item) for item in sorted(section_names, key=len, reverse=True)) + r")(?:\s|[:：]|$)")
+    entry_line = re.compile(r"(?:19|20)\d{2}[.年/\-]|[|｜]|—|–")
+    expanded_body_lines = []
     for body_line in body_lines:
         current = body_line.strip()
-        starts_block = normalize(current) in section_names or date_line.match(current) or current.startswith(("-", "•", "·", "", "▪", "◦", "●", "○"))
-        if merged_body_lines and not starts_block:
+        matches = list(section_token.finditer(current))
+        if matches and matches[0].start() > 0:
+            prefix = current[:matches[0].start()].strip()
+            if prefix:
+                expanded_body_lines.append(prefix)
+            current = current[matches[0].start():].strip()
+        expanded_body_lines.append(current)
+    body_lines = expanded_body_lines
+    merged_body_lines = []
+    previous_is_block = False
+    for body_line in body_lines:
+        current = body_line.strip()
+        is_heading = normalize(current) in section_names
+        starts_block = is_heading or entry_line.search(current) is not None or current.startswith(("-", "•", "·", "", "▪", "◦", "●", "○"))
+        if merged_body_lines and not starts_block and not previous_is_block:
             merged_body_lines[-1] = f"{merged_body_lines[-1]} {current}".strip()
         else:
             merged_body_lines.append(current)
+        previous_is_block = starts_block
     body_lines = merged_body_lines
     y = 138
     for original_line in body_lines:
         heading = normalize(original_line) in section_names
+        entry = not heading and entry_line.search(original_line) is not None
         wrapped = generated_lines(original_line, 64)
         needed = (14 if heading else 0) + len(wrapped) * 13 + 2
         if y + needed > 828:
@@ -678,7 +698,7 @@ def create_generated_resume_pdf(payload, portrait=None):
             y += 14
             continue
         for line, _ in wrapped:
-            spare = page.insert_textbox((margin, y, 549, y + 13), line, fontname=font_name, fontsize=7, color=(0.08, 0.10, 0.10), lineheight=1.0)
+            spare = page.insert_textbox((margin, y, 549, y + 13), line, fontname=font_name, fontsize=7.2 if entry else 7, color=(0.08, 0.10, 0.10), lineheight=1.0)
             if spare < 0:
                 raise RuntimeError("generated resume line did not fit")
             y += 13

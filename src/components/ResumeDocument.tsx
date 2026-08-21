@@ -68,10 +68,19 @@ const CITY_KEYWORDS =
 const CITY_RE = new RegExp(CITY_KEYWORDS);
 
 function parseResumeText(text: string, candidateName?: string) {
-  const lines = text
+  const rawLines = text
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean);
+  const inlineHeadings = [...sectionTitles].sort((left, right) => right.length - left.length);
+  const lines = rawLines.flatMap((line) => {
+    const match = inlineHeadings
+      .map((heading) => ({ heading, index: line.indexOf(heading) }))
+      .filter(({ index }) => index > 0 && /(?:\s|[：:])$/.test(line.slice(0, index)))
+      .sort((left, right) => left.index - right.index)[0];
+    if (!match) return [line];
+    return [line.slice(0, match.index).trim(), line.slice(match.index).trim()].filter(Boolean);
+  });
 
   // 1) 优先从正文里提取"姓名：XXX"这一行作为姓名
   const explicitNameMatch = lines
@@ -200,7 +209,7 @@ function extractPersonalInfo(line: string): PersonalInfo[] {
 function lineClassName(line: string) {
   if (/^\d+[.、]/.test(line)) return "resume-bullet numbered";
   if (/^-/.test(line)) return "resume-bullet";
-  if (/^(20|19|项目\s*\d|「|【)/.test(line) || /[｜|]/.test(line)) {
+  if (/(?:19|20)\d{2}[.年/\-]/.test(line) || /[｜|]/.test(line) || /^(项目\s*\d|「|【)/.test(line)) {
     return "resume-entry-title";
   }
   return "resume-line";

@@ -485,7 +485,7 @@ h3 {
 }
 .resume-section-content { padding-top: 6px; }
 .resume-section p { margin-bottom: 4px; font-size: 12px; line-height: 1.48; }
-.resume-entry-title { margin-top: 6px !important; }
+.resume-entry-title { margin-top: 8px !important; font-weight: 650; color: #1f332f; }
 
 .resume-template-business .resume-section h3 {
   color: #2f3a4a;

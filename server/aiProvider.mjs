@@ -471,10 +471,10 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
         if (patchResult) return patchResult;
         // patch 路径失败或未通过质量门禁 → 自动降级到标准管线
       }
-      const strategyRaw = await completeWithRetry(buildStrategyMessages(input), true, 900, undefined, deadlineAt);
+      const strategyRaw = await completeWithRetry(buildStrategyMessages(input), true, 700, undefined, deadlineAt);
       const strategy = await parseJsonContent(strategyRaw, { mode: sourceMode === "creator" ? "creator" : "novice", targetRole, keywords: [], priorityEvidence: [], deprioritizedEvidence: [], gaps: [], highlights: [], evidence: [], structure: [] });
-      let draft = await completeWithRetry(buildRewriteMessages(input, strategy), false, 2200, undefined, deadlineAt);
-      const qaRaw = await completeWithRetry(buildQaMessages(input, strategy, draft), true, 3200, undefined, deadlineAt);
+      let draft = await completeWithRetry(buildRewriteMessages(input, strategy), false, 1800, undefined, deadlineAt);
+      const qaRaw = await completeWithRetry(buildQaMessages(input, strategy, draft), true, 2200, undefined, deadlineAt);
       const qa = await parseJsonContent(qaRaw, { verdict: "ready", score: 85, issues: [], suggestions: [] });
       if (typeof qa.finalText === "string" && qa.finalText.trim()) draft = qa.finalText.trim();
       draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
@@ -483,7 +483,7 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
       // 最多两轮修复：让 AI 依据未验证清单自己删改并保持句子通顺（比删 token 保留更多语义）
       let repairCount = 0;
       while (!quality.passed && repairCount < 2) {
-        draft = await completeWithRetry(buildRepairMessages(input, strategy, draft, quality.checks), false, 2200, undefined, deadlineAt);
+        draft = await completeWithRetry(buildRepairMessages(input, strategy, draft, quality.checks), false, 1800, undefined, deadlineAt);
         draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
         quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa: { verdict: "ready", score: qa.score || 80 }, strategy });
         repairCount += 1;
