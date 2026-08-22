@@ -15,19 +15,30 @@ const sectionTitles = new Set([
   "核心优势",
   "工作经历 / 实习经历",
   "工作经历",
+  "工作经验",
+  "职业经历",
   "实习经历",
+  "实习经验",
   "实习及项目经历",
   "项目与实习经历",
   "核心经历",
   "关键成果",
   "代表成果",
   "项目经历",
+  "项目经验",
   "校园项目",
   "校园经历",
+  "校园实践",
+  "校内经历",
   "校园实践经历",
   "社会实践经历",
+  "社会实践",
   "实践经历",
+  "实践经验",
   "社会经历",
+  "兼职经历",
+  "兼职经验",
+  "经历",
   "在校经历",
   "学生工作经历",
   "教育经历",
@@ -173,8 +184,14 @@ function parseResumeText(text: string, candidateName?: string) {
       current = { title: "实践经历", lines: [] };
       sections.push(current);
     }
+    // 没有栏目标题的 PDF 不能把所有日期行默认当成教育经历：
+    // 教育段之后出现公司/职位日期行时，单独开启工作经历栏目。
+    if (current && isEducationSection(current.title) && looksLikeExperienceLine(line)) {
+      current = { title: "工作经历", lines: [] };
+      sections.push(current);
+    }
     if (!current) {
-      current = { title: looksLikeEducationLine(line) ? "教育背景" : "简历内容", lines: [] };
+      current = { title: looksLikeEducationLine(line) ? "教育背景" : looksLikeExperienceLine(line) ? "工作经历" : "简历内容", lines: [] };
       sections.push(current);
     }
     current.lines.push(line);
@@ -193,6 +210,15 @@ function parseResumeText(text: string, candidateName?: string) {
 
 function looksLikeEducationLine(line: string) {
   return /^(?:19|20)\d{2}[.\-/]/.test(line) || /(?:大学|学院|本科|硕士|博士)/.test(line);
+}
+
+function isEducationSection(title: string) {
+  return title === "教育背景" || title === "教育经历";
+}
+
+function looksLikeExperienceLine(line: string) {
+  if (!/^(?:19|20)\d{2}/.test(line) || /(?:大学|学院|本科|硕士|博士)/.test(line)) return false;
+  return /(?:公司|集团|工作室|机构|门店|医院|学校|运营|专员|工程师|助理|经理|主管|负责人|编辑|设计师|程序员|开发|教师|老师|客服|销售|实习)/.test(line);
 }
 
 function extractPersonalInfo(line: string): PersonalInfo[] {

@@ -954,6 +954,34 @@ button.admin-module-card {
   justify-content: center;
 }
 
+.admin-vote-chart {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(72px, 1fr));
+  gap: 18px;
+  align-items: end;
+  min-height: 220px;
+  padding: 18px 8px 4px;
+}
+
+.admin-vote-column {
+  display: grid;
+  grid-template-rows: 24px 150px auto;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+}
+
+.admin-vote-column strong { color: #173c33; font-size: 16px; }
+.admin-vote-column span { color: #71706b; font-size: 12px; white-space: nowrap; }
+.admin-vote-track { display: flex; width: 34px; height: 150px; align-items: flex-end; border-radius: 4px 4px 0 0; background: #edf1ed; overflow: hidden; }
+.admin-vote-bar { display: block; width: 100%; min-height: 6px; border-radius: 4px 4px 0 0; background: #1a5a49; }
+
+@media (max-width: 640px) {
+  .admin-vote-chart { gap: 8px; overflow-x: auto; }
+  .admin-vote-column { min-width: 64px; }
+  .admin-vote-column span { font-size: 11px; }
+}
+
 .admin-row-actions {
   display: inline-flex !important;
   justify-content: flex-end;
@@ -2191,7 +2219,10 @@ body:has(.apple-style-home) { overflow-y: hidden; }
 }
 .public-editorial-shell .resume-stage-shadow { display: none; }
 @media (max-width: 760px) {
+  body:has(.apple-style-home) { overflow-y: auto; }
+  .public-editorial-shell .apple-style-home { height: auto; min-height: calc(100vh - 74px); overflow: visible; }
   .public-editorial-shell .apple-hero-page { display: block; padding: 58px 24px 0; }
+  .public-editorial-shell .apple-hero-page { min-height: calc(100vh - 74px); height: auto; overflow: visible; padding-bottom: 76px; }
   .public-editorial-shell .apple-page-copy h1 { font-size: 48px; }
   .public-editorial-shell .apple-page-copy p { font-size: 14px; }
   .public-editorial-shell .apple-resume-visual {
@@ -2202,3 +2233,48 @@ body:has(.apple-style-home) { overflow-y: hidden; }
     transform: rotate(1.5deg) translateY(40px);
   }
 }
+
+/* UI palette v2: replace the remaining blue utility accents with a restrained pine system. */
+.public-editorial-shell {
+  --ui-paper: #f7f5ef;
+  --ui-surface: #fffefa;
+  --ui-ink: #1e2824;
+  --ui-muted: #737a74;
+  --ui-line: #dfe3dc;
+  --ui-pine: #1f4a3d;
+  --ui-pine-hover: #2c6553;
+  --ui-sage: #eaf1ec;
+  background: var(--ui-paper) !important;
+  color: var(--ui-ink) !important;
+}
+.public-editorial-shell .topbar,
+.public-editorial-shell .apple-style-home,
+.public-editorial-shell .page-shell,
+.public-editorial-shell .editor-shell,
+.public-editorial-shell .start-choose,
+.public-editorial-shell .start-create-view { background: var(--ui-paper) !important; }
+.public-editorial-shell .brand-mark,
+.public-editorial-shell .top-actions .user-button,
+.public-editorial-shell .apple-page-copy button,
+.public-editorial-shell .workspace-heading-actions .primary-button,
+.public-editorial-shell .editor-header-actions button:first-child,
+.public-editorial-shell .export-gate-confirm,
+.public-editorial-shell .public-primary-button { background: var(--ui-pine) !important; border-color: var(--ui-pine) !important; color: #fff !important; }
+.public-editorial-shell .top-actions .user-button:hover,
+.public-editorial-shell .apple-page-copy button:hover,
+.public-editorial-shell .workspace-heading-actions .primary-button:hover,
+.public-editorial-shell .editor-header-actions button:first-child:hover,
+.public-editorial-shell .export-gate-confirm:hover,
+.public-editorial-shell .public-primary-button:hover { background: var(--ui-pine-hover) !important; border-color: var(--ui-pine-hover) !important; }
+.public-editorial-shell .apple-page-copy h1 em,
+.public-editorial-shell .apple-eyebrow,
+.public-editorial-shell .start-choose-title em,
+.public-editorial-shell .upload-card-icon,
+.public-editorial-shell .export-gate-contact button { color: var(--ui-pine) !important; }
+.public-editorial-shell .page-shell input:focus,
+.public-editorial-shell .page-shell textarea:focus,
+.public-editorial-shell .page-shell select:focus { border-color: var(--ui-pine) !important; outline-color: rgba(31,74,61,.18) !important; }
+.public-editorial-shell .upload-card:hover,
+.public-editorial-shell .start-choose-card:hover { border-color: #9ab8a8 !important; background: var(--ui-sage) !important; }
+.public-editorial-shell .export-gate-copy.is-selected { border-color: var(--ui-pine) !important; background: var(--ui-sage) !important; color: var(--ui-pine) !important; }
+.public-editorial-shell .editor-document-panel { background: #edf1ed !important; border-color: var(--ui-line) !important; }

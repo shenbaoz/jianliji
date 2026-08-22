@@ -424,3 +424,24 @@ test("pipeline deadline aborts retries so the client never waits past its window
     }
   );
 });
+
+test("long resume optimization skips the extra QA call while keeping safety checks", async () => {
+  const calls = [];
+  const client = createDeepSeekClient({
+    apiKey: "test-key",
+    fetchImpl: async (_url, options) => {
+      const body = JSON.parse(options.body);
+      calls.push(body.messages.at(-1)?.content || "");
+      const isStrategy = body.response_format?.type === "json_object";
+      const content = isStrategy
+        ? JSON.stringify({ mode: "professional", targetRole: "通用求职版", keywords: [], priorityEvidence: [], deprioritizedEvidence: [], gaps: [], highlights: [], evidence: [], structure: [] })
+        : "张三\n工作经历\n2019-2020 公司｜岗位\n负责项目推进";
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+  });
+  const source = `个人信息\n张三\n${"项目与科研成果\n".repeat(2_000)}工作经历\n2019-2020 公司｜岗位\n负责项目推进`;
+  const result = await client.optimize({ resumeText: source, targetRole: "通用求职版", jobDescription: "", sourceMode: "resume" });
+  assert.equal(result.safe, true);
+  assert.match(result.text, /工作经历/);
+  assert.equal(calls.some((content) => /质检|QA|quality/i.test(content)), false);
+});

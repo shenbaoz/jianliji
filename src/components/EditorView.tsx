@@ -15,9 +15,26 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
   const [exportMessage, setExportMessage] = useState("");
   const [feedbackError, setFeedbackError] = useState("");
   const [gateAction, setGateAction] = useState<null | (() => void)>(null);
+  const [feedbackOnly, setFeedbackOnly] = useState(false);
+  const feedbackStorageKey = currentVersion?.id ? `resume-feedback-submitted:${currentVersion.id}` : "";
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(() => {
+    if (!feedbackStorageKey || typeof window === "undefined") return false;
+    try {
+      return window.sessionStorage.getItem(feedbackStorageKey) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const requestExport = (action: () => void) => {
+    setFeedbackOnly(false);
     setGateAction(() => action);
+  };
+
+  const requestFeedback = () => {
+    setFeedbackError("");
+    setGateAction(null);
+    setFeedbackOnly(true);
   };
 
   const confirmUnlock = async (priceChoice: string, note: string) => {
@@ -34,8 +51,18 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
       setFeedbackError(error instanceof Error ? error.message : "反馈提交失败，请稍后重试。");
       return;
     }
+    setFeedbackSubmitted(true);
+    if (feedbackStorageKey) {
+      try {
+        window.sessionStorage.setItem(feedbackStorageKey, "1");
+      } catch {
+        // The in-memory state still prevents duplicate prompts in this view.
+      }
+    }
     const pending = gateAction;
     setGateAction(null);
+    setFeedbackOnly(false);
+    setExportMessage(pending ? "反馈已提交，正在继续下载。" : "反馈已提交，之后下载无需再次反馈。");
     pending?.();
   };
 
@@ -97,15 +124,15 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
         <div className="mb-5 border-b border-slate-200 pb-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">成稿</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">成稿已整理完成，可直接下载。</p>
+              <h1 className="text-2xl font-semibold tracking-tight">你的简历成稿已生成</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-500">已根据你的经历整理出一版可编辑版本。查看修改重点后，即可下载 PDF 或 Word。</p>
             </div>
             <div className="editor-header-actions flex flex-wrap gap-2">
-              <button type="button" onClick={() => requestExport(handleDownloadPdf)} disabled={!canPublish} className="editor-primary-export inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33] disabled:cursor-not-allowed disabled:bg-slate-400">
+              <button type="button" onClick={() => feedbackSubmitted ? handleDownloadPdf() : requestExport(handleDownloadPdf)} disabled={!canPublish} className="editor-primary-export inline-flex h-10 items-center gap-2 rounded-sm bg-slate-950 px-4 text-xs font-semibold text-white hover:bg-[#173c33] disabled:cursor-not-allowed disabled:bg-slate-400">
                 <FileText size={14} />
                 下载 PDF
               </button>
-              <button type="button" onClick={() => requestExport(handleDownloadWord)} className="inline-flex h-10 items-center gap-2 rounded-sm border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => feedbackSubmitted ? handleDownloadWord() : requestExport(handleDownloadWord)} className="inline-flex h-10 items-center gap-2 rounded-sm border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50">
                 <Download size={14} />
                 下载 Word
               </button>
@@ -114,9 +141,18 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
         </div>
         {exportMessage && <div className="app-toast" role="status">{exportMessage}</div>}
         <OptimizationHighlightsCard highlights={currentVersion?.highlights} />
+        <div className="mb-5 flex flex-col gap-3 rounded-lg border border-[#d2e0d9] bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div>
+            <p className="text-sm font-semibold text-[#1a3c34]">看完这份简历，愿意给个反馈吗？</p>
+            <p className="mt-1 text-xs leading-5 text-[#71706b]">不下载也可以提交；提交后下载不会再次询问。</p>
+          </div>
+          <button type="button" onClick={requestFeedback} disabled={feedbackSubmitted} className="inline-flex h-9 shrink-0 items-center justify-center rounded-sm border border-[#1a3c34] px-4 text-xs font-semibold text-[#1a3c34] hover:bg-[#f3f8f5] disabled:cursor-default disabled:border-[#a8b9b0] disabled:text-[#718178]">
+            {feedbackSubmitted ? "反馈已提交" : "提交反馈"}
+          </button>
+        </div>
         <ChangeCompareCard changes={resumeChanges} />
         <div className="editor-document-panel border border-slate-200 p-4 sm:p-8">
-            <div className="mb-4 flex items-center justify-between"><span className="text-sm font-medium text-slate-800">可投递成稿</span><span className="editor-complete-label text-xs">已完成</span></div>
+            <div className="mb-4 flex items-center justify-between"><span className="text-sm font-medium text-slate-800">投递版预览</span><span className="editor-complete-label text-xs">已生成</span></div>
             <div className="editor-preview-viewport mx-auto w-full max-w-[900px] overflow-auto custom-scrollbar">
               <div className="resume-print-area mx-auto w-[210mm] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.12)] outline-none focus:ring-2 focus:ring-sky-500" spellCheck={false} aria-label="整理后的简历">
                 <ResumeDocument text={generatedResumeText} template={template} portraitDataUrl={preparedPdf?.portraitDataUrl} candidateName={currentVersion?.candidateName} />
@@ -124,11 +160,12 @@ export const EditorView: React.FC<EditorViewProps> = ({ currentVersion }) => {
             </div>
         </div>
       </div>
-      {gateAction && (
+      {(gateAction || feedbackOnly) && (
         <ExportGateDialog
-          onCancel={() => setGateAction(null)}
+          onCancel={() => { setGateAction(null); setFeedbackOnly(false); }}
           onUnlock={confirmUnlock}
           error={feedbackError}
+          submitLabel={gateAction ? "提交反馈并下载" : "提交反馈并关闭"}
         />
       )}
     </section>
@@ -167,7 +204,7 @@ function OptimizationHighlightsCard({ highlights }: { highlights?: string[] }) {
 
   return (
     <div className="mb-5 rounded-lg border border-[#d2e0d9] bg-[#f3f8f5] p-4 sm:p-5">
-      <h2 className="text-sm font-semibold text-[#1a3c34]">本次优化重点</h2>
+      <h2 className="text-sm font-semibold text-[#1a3c34]">这次主要帮你处理了</h2>
       <ul className="mt-3 space-y-2">
         {visible.map((item, index) => (
           <li key={index} className="flex items-start gap-2 text-xs leading-5 text-[#1a3c34]">
@@ -192,7 +229,7 @@ function ChangeCompareCard({ changes }: { changes: Array<{ before: string; after
           <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1a3c34] px-1.5 text-[11px] font-bold text-white">
             {changes.length}
           </span>
-          本次整理内容
+          具体改了哪些地方
         </h2>
         {changes.length > 4 && (
           <button type="button" className="text-xs font-medium text-[#71706b] hover:text-[#1a3c34]" onClick={() => setExpanded((v) => !v)}>
@@ -215,7 +252,7 @@ function ChangeCompareCard({ changes }: { changes: Array<{ before: string; after
   );
 }
 
-function ExportGateDialog({ onCancel, onUnlock, error }: { onCancel: () => void; onUnlock: (priceChoice: string, note: string) => void; error: string }) {
+function ExportGateDialog({ onCancel, onUnlock, error, submitLabel }: { onCancel: () => void; onUnlock: (priceChoice: string, note: string) => void; error: string; submitLabel: string }) {
   const [priceChoice, setPriceChoice] = useState("");
   const [note, setNote] = useState("");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -234,22 +271,22 @@ function ExportGateDialog({ onCancel, onUnlock, error }: { onCancel: () => void;
   return (
     <div className="export-gate-overlay" role="dialog" aria-modal="true" aria-label="导出前反馈引导">
       <div className="export-gate-card">
-        <p className="export-gate-kicker">当前免费</p>
+        <p className="export-gate-kicker">下载前反馈</p>
         <h2>想听你的判断</h2>
-        <p className="export-gate-note">如果这份简历收费，你愿意付多少？</p>
+        <p className="export-gate-note">请选择你认为合适的价格，帮助我们了解这份简历服务的价值。</p>
         <p className="export-gate-contact">微信：<strong>18142560091</strong><button type="button" onClick={() => void copyWechat()} aria-label="复制微信号">{copyState === "copied" ? "已复制" : copyState === "failed" ? "复制失败" : "复制"}</button></p>
         <div className="export-gate-actions export-gate-price-options" role="radiogroup" aria-label="付费意愿">
           {[
-            ["not-willing", "不愿意付费"],
             ["9-9", "9.9 元"],
-            ["19-9-plus", "19.9 元及以上"]
+            ["19-9", "19.9 元"],
+            ["29-9", "29.9 元"]
           ].map(([value, label]) => (
             <button key={value} type="button" role="radio" aria-checked={priceChoice === value} className={priceChoice === value ? "export-gate-copy is-selected" : "export-gate-copy"} onClick={() => setPriceChoice(value)}>{label}</button>
           ))}
         </div>
         <label className="export-gate-feedback-label">哪里让你觉得值，或不值？<span>可不填</span><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="写一句就行" /></label>
         {error && <p className="export-gate-error" role="alert">{error}</p>}
-        <button type="button" className="export-gate-confirm" disabled={!priceChoice} onClick={() => onUnlock(priceChoice, note)}>提交并免费下载</button>
+        <button type="button" className="export-gate-confirm" disabled={!priceChoice} onClick={() => onUnlock(priceChoice, note)}>{submitLabel}</button>
         <button type="button" className="export-gate-skip" onClick={onCancel}>
           暂不导出
         </button>

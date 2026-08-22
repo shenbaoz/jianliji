@@ -63,11 +63,12 @@ export function ResumeStartView({ input, onChange, onGenerate, isGenerating, fol
   }
   if (mode === "create") {
     const canGenerate = direction.trim().length > 1 && facts.trim().length > 10;
+    const experienceLength = facts.trim().length;
     return <section className="start-create-view mx-auto max-w-2xl px-5 py-10 sm:py-16">
       <button type="button" className="start-mode-back mb-8" onClick={() => setMode("choose")}><ArrowLeft size={15} className="mr-1 inline" />换一种方式</button>
       <p className="start-create-kicker text-sm font-semibold">从零创建</p>
-      <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">从经历开始</h1>
-      <p className="mt-3 leading-7 text-slate-600">课程、社团、实习和工具都可以写。</p>
+      <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">没有完整简历，也可以开始</h1>
+      <p className="mt-3 leading-7 text-slate-600">写下目标岗位和真实经历，我们帮你整理成一份基础简历。</p>
       <BasicInfoFields value={basicInfo} onChange={setBasicInfo} />
       <label className="start-create-field mt-5 block text-sm font-semibold">头像（可选）
         <input type="file" accept="image/jpeg,image/png" onChange={(event) => handlePortrait(event.target.files?.[0])} />
@@ -76,7 +77,7 @@ export function ResumeStartView({ input, onChange, onGenerate, isGenerating, fol
         {portraitStatus && <span className="mt-2 block text-xs font-normal text-slate-500" role="status">{portraitStatus}</span>}
       </label>
       <label className="start-create-field mt-8 block text-sm font-semibold">求职方向<input value={direction} onChange={(event) => setDirection(event.target.value)} placeholder="例如：内容运营、行政助理、前端开发" /></label>
-      <label className="start-create-field mt-5 block text-sm font-semibold">你的经历<textarea value={facts} onChange={(event) => setFacts(event.target.value)} placeholder="例如：在学院新媒体中心负责活动推文排版；组织过迎新活动，现场负责签到和引导；会使用剪映和 Excel。" /></label>
+      <label className="start-create-field mt-5 block text-sm font-semibold">你的经历<textarea value={facts} onChange={(event) => setFacts(event.target.value)} placeholder="例如：在学院新媒体中心负责活动推文排版；组织过迎新活动，现场负责签到和引导；会使用剪映和 Excel。" /><span className="mt-2 block text-xs font-normal text-slate-500" role="status">必须超过 10 个字的真实经历（当前 {experienceLength} 个字），不能只填“无”。</span></label>
       {followUpQuestions.length > 0 && (
         <div className="start-follow-up mt-6">
           <p className="text-sm font-semibold">为使简历更具体，请回答以下问题（可跳过）：</p>
@@ -91,11 +92,11 @@ export function ResumeStartView({ input, onChange, onGenerate, isGenerating, fol
   }
   return <section className="start-choose">
     <div className="start-choose-head"><span className="start-choose-index">01</span><span className="start-choose-kicker">开始一份简历</span></div>
-    <div className="start-choose-intro"><div><h1 className="start-choose-title">选择你的<br /><em>开始方式。</em></h1></div><p className="start-choose-desc">从已有简历开始，或从真实经历开始。我们会帮你整理成一份更适合投递的版本。</p></div>
+    <div className="start-choose-intro"><div><h1 className="start-choose-title">选择你的<br /><em>开始方式。</em></h1></div><p className="start-choose-desc">有现成简历就直接优化；还没有完整简历，也可以从真实经历开始。</p></div>
     <div className="start-choose-grid">
-      <button type="button" onClick={() => setMode("optimize")} className="start-choose-card start-choose-card-optimize"><div className="start-choose-card-top"><span className="start-choose-card-index">01</span><FileText size={23} strokeWidth={1.5} /></div><div className="start-choose-card-copy"><strong>已有简历</strong><span>上传文件后自动整理。</span></div><div className="start-choose-card-bottom"><small>PDF / DOCX / TXT</small><b aria-hidden="true">↗</b></div></button>
-      <button type="button" onClick={() => setMode("create")} className="start-choose-card start-choose-card-create"><div className="start-choose-card-top"><span className="start-choose-card-index">02</span><Sparkles size={23} strokeWidth={1.5} /></div><div className="start-choose-card-copy"><strong>从零创建</strong><span>填写目标方向和真实经历。</span></div><div className="start-choose-card-bottom"><small>适合还没有完整简历的人</small><b aria-hidden="true">↗</b></div></button>
+      <button type="button" onClick={() => setMode("optimize")} className="start-choose-card start-choose-card-optimize"><div className="start-choose-card-top"><span className="start-choose-card-index">01</span><FileText size={23} strokeWidth={1.5} /></div><div className="start-choose-card-copy"><strong>已有简历</strong><span>上传后，提炼重点并优化表达。</span></div><div className="start-choose-card-bottom"><small>PDF / DOCX / TXT</small><b aria-hidden="true">↗</b></div></button>
+      <button type="button" onClick={() => setMode("create")} className="start-choose-card start-choose-card-create"><div className="start-choose-card-top"><span className="start-choose-card-index">02</span><Sparkles size={23} strokeWidth={1.5} /></div><div className="start-choose-card-copy"><strong>从零创建</strong><span>写下目标岗位和真实经历。</span></div><div className="start-choose-card-bottom"><small>适合还没有完整简历的人</small><b aria-hidden="true">↗</b></div></button>
     </div>
-    <div className="start-choose-footer"><span>简历记 / RESUME NOTE</span><span>你的内容只属于你</span></div>
+    <div className="start-choose-footer"><span>简历记 / RESUME NOTE</span><span>真实经历 · 可编辑成稿</span></div>
   </section>;
 }

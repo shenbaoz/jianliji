@@ -1,5 +1,5 @@
 import { getApiBase } from "./apiBase";
-import type { SavedResumeVersion, UnlockInterest } from "../types";
+import type { AdminUsageStats, SavedResumeVersion, UnlockInterest } from "../types";
 
 const visitorKey = "resume-job-fit-visitor-id";
 const visitorPattern = /^[a-zA-Z0-9_-]{16,80}$/;
@@ -74,6 +74,22 @@ export async function loadUnlockInterest(): Promise<UnlockInterest[]> {
   if (response.status === 401) throw new Error("管理员登录已失效，请重新登录。");
   if (!response.ok) throw new Error("读取解锁意向失败，请稍后重试。");
   return (await response.json()) as UnlockInterest[];
+}
+
+export async function loadAdminUsageStats(): Promise<AdminUsageStats> {
+  const response = await fetch(`${apiBase}/api/admin/usage-stats`, { credentials: "include" });
+  if (response.status === 401) throw new Error("管理员登录已失效，请重新登录。");
+  if (!response.ok) throw new Error("读取使用统计失败，请稍后重试。");
+  return (await response.json()) as AdminUsageStats;
+}
+
+export async function recordUsageEvent(eventType: "resume_optimize" | "creator_generate") {
+  const response = await fetch(`${apiBase}/api/usage-events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getVisitorHeaders() },
+    body: JSON.stringify({ eventType })
+  });
+  if (!response.ok) throw new Error("使用统计暂时不可用。");
 }
 
 export async function deleteUnlockInterest(id: string) {

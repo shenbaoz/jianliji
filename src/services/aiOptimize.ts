@@ -1,4 +1,5 @@
 import { getApiBase } from "./apiBase";
+import { getVisitorHeaders } from "./storage";
 import type { ResumeInput } from "../types";
 
 type AiOptimizeResponse = { provider: "deepseek" | "kimi"; model: string; text: string; changes?: Array<{ before: string; after: string }>; suggestions?: string[]; highlights?: string[]; quality?: { verdict: "ready" | "needs_evidence"; score: number; checks: string[]; highlights?: string[] }; reviewFlags?: string[]; safe?: boolean };
@@ -8,7 +9,7 @@ export async function optimizeWithDeepSeek(input: ResumeInput, evidenceAnswers: 
   try {
     const response = await fetch(`${getApiBase()}/api/ai/optimize`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getVisitorHeaders() },
       body: JSON.stringify({
         resumeText: input.resumeText,
         targetRole: input.targetRole,

@@ -6,8 +6,15 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("public start flow exposes the redesigned entry points", async () => {
   const source = await read("src/components/ResumeStartView.tsx");
-  assert.match(source, /start-choose-card-meta/);
+  assert.match(source, /start-choose-card-bottom/);
   assert.doesNotMatch(source, /不需要登录|当前免费开放|约 1 分钟/);
+});
+
+test("from-zero flow explains the minimum experience length before generation", async () => {
+  const source = await read("src/components/ResumeStartView.tsx");
+  assert.match(source, /必须超过 10 个字/);
+  assert.match(source, /真实经历/);
+  assert.match(source, /facts\.trim\(\)\.length > 10/);
 });
 
 test("public entry surfaces keep the interface focused on file-first actions", async () => {
@@ -28,12 +35,22 @@ test("export feedback shows the owner's WeChat contact", async () => {
 test("every export click opens the price feedback gate", async () => {
   const editor = await read("src/components/EditorView.tsx");
   assert.doesNotMatch(editor, /exportUnlocked/);
-  assert.match(editor, /const requestExport = \(action: \(\) => void\) => \{\s*setGateAction/);
+  assert.match(editor, /const requestExport = \(action: \(\) => void\) => \{[\s\S]*?setGateAction/);
+});
+
+test("result-page feedback unlocks later downloads without asking again", async () => {
+  const editor = await read("src/components/EditorView.tsx");
+  assert.match(editor, /提交反馈/);
+  assert.match(editor, /feedbackSubmitted/);
+  assert.match(editor, /sessionStorage/);
+  assert.match(editor, /feedbackSubmitted \? handleDownloadPdf\(\) : requestExport\(handleDownloadPdf\)/);
+  assert.match(editor, /feedbackSubmitted \? handleDownloadWord\(\) : requestExport\(handleDownloadWord\)/);
+  assert.match(editor, /提交反馈并关闭/);
 });
 
 test("final resume is read-only with PDF as the primary export", async () => {
   const editor = await read("src/components/EditorView.tsx");
-  assert.match(editor, /成稿已整理完成/);
+  assert.match(editor, /你的简历成稿已生成/);
   assert.match(editor, /下载 PDF/);
   assert.doesNotMatch(editor, /可继续编辑|打印 \/ 保存 PDF|contentEditable/);
   assert.match(editor, /className="editor-primary-export\b/);
@@ -62,6 +79,13 @@ test("public styling defines the unified monochrome action system", async () => 
   assert.match(source, /--accent: #202022/);
   assert.match(source, /\.public-primary-button/);
   assert.match(source, /\.start-choose-card-meta/);
+});
+
+test("mobile homepage keeps the full hero scrollable instead of clipping the resume preview", async () => {
+  const styles = await read("src/styles.css");
+  assert.match(styles, /@media \(max-width: 760px\) \{[\s\S]*?body:has\(\.apple-style-home\) \{\s*overflow-y:\s*auto/);
+  assert.match(styles, /@media \(max-width: 760px\) \{[\s\S]*?\.public-editorial-shell \.apple-style-home \{[\s\S]*?height:\s*auto/);
+  assert.match(styles, /@media \(max-width: 760px\) \{[\s\S]*?\.public-editorial-shell \.apple-hero-page \{[\s\S]*?overflow:\s*visible/);
 });
 
 test("export feedback dialog is compact and centered without a white card", async () => {
@@ -113,9 +137,13 @@ test("from-zero flow accepts an optional portrait and sends it into generated PD
 
 test("all export actions remain behind the price and feedback gate", async () => {
   const editor = await read("src/components/EditorView.tsx");
-  assert.match(editor, /onClick=\{\(\) => requestExport\(handleDownloadPdf\)\}/);
-  assert.match(editor, /onClick=\{\(\) => requestExport\(handleDownloadWord\)\}/);
-  assert.match(editor, /提交并免费下载/);
+  assert.match(editor, /feedbackSubmitted \? handleDownloadPdf\(\) : requestExport\(handleDownloadPdf\)/);
+  assert.match(editor, /feedbackSubmitted \? handleDownloadWord\(\) : requestExport\(handleDownloadWord\)/);
+  assert.match(editor, /提交反馈并下载/);
+  assert.match(editor, /9\.9 元/);
+  assert.match(editor, /19\.9 元/);
+  assert.match(editor, /29\.9 元/);
+  assert.doesNotMatch(editor, /不愿意付费|19\.9 元及以上|当前免费|免费下载/);
   assert.match(editor, /哪里让你觉得值，或不值/);
 });
 
@@ -138,6 +166,16 @@ test("generated PDF header keeps compact personal information", async () => {
   assert.match(source, /性别/);
   assert.match(source, /电子邮箱/);
   assert.match(source, /联系方式/);
+});
+
+test("AI content is not discarded when optional PDF preparation fails", async () => {
+  const app = await read("src/App.tsx");
+  const resultIndex = app.indexOf("setResult({ text: refined.text");
+  const pdfIndex = app.indexOf("const preparedPdf =");
+  assert.ok(resultIndex >= 0, "the generated AI content must be committed to UI state");
+  assert.ok(pdfIndex >= 0, "PDF preparation must remain an explicit step");
+  assert.ok(resultIndex < pdfIndex, "the editor must not wait for optional PDF preparation");
+  assert.match(app, /PDF.*准备|PDF.*失败|pdf/i);
 });
 
 test("footer exposes the required public security registration", async () => {

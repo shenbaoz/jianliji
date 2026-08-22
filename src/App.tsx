@@ -34,7 +34,7 @@ export default function App() {
   };
   const refine = async (nextInput: ResumeInput, evidenceAnswers: string[] = []) => {
     if (inFlight.current || nextInput.resumeText.trim().length < 11) {
-      setMessage(nextInput.sourceMode === "creator" ? "请先写下一件你做过的事。" : "请先导入可读取的简历。");
+      setMessage(nextInput.sourceMode === "creator" ? "请先写下一件你做过的真实经历。" : "请先上传一份可读取的简历。");
       return;
     }
     inFlight.current = true;
@@ -55,14 +55,30 @@ export default function App() {
         }
         throw new Error(refined.reviewFlags?.[0] || questions[0] || "信息不足，请补充具体经历。");
       }
-      const preparedPdf = normalized.originalResumeFileUrl && /pdf/i.test(normalized.originalResumeMimeType || "")
-        ? await createEditedPdfPreview(normalized.originalResumeFileUrl, refined.text, refined.changes || [], normalized.candidateName)
-        : await createGeneratedPdf(refined.text, normalized.portraitDataUrl, normalized.candidateName);
       setInput(normalized);
       setFollowUpQuestions([]);
       setFollowUpRounds(0);
-      setResult({ text: refined.text, changes: refined.changes || [], highlights: refined.highlights || [], preparedPdf });
+      // 先提交 AI 成稿，再准备可下载文件。PDF 同步失败时不能把已经生成的内容一起吞掉，
+      // 否则用户只会看到“没反应”，也无法判断到底是 AI 还是导出环节出了问题。
+      setResult({ text: refined.text, changes: refined.changes || [], highlights: refined.highlights || [] });
       go("editor");
+      try {
+        const preparedPdf = normalized.originalResumeFileUrl && /pdf/i.test(normalized.originalResumeMimeType || "")
+          ? await createEditedPdfPreview(normalized.originalResumeFileUrl, refined.text, refined.changes || [], normalized.candidateName)
+          : await createGeneratedPdf(refined.text, normalized.portraitDataUrl, normalized.candidateName);
+        setResult((current) => current ? { ...current, preparedPdf } : current);
+      } catch (pdfError) {
+        // 原 PDF 的版式同步不是成稿展示的前置条件；失败时再尝试生成标准版 PDF。
+        try {
+          const fallbackPdf = await createGeneratedPdf(refined.text, normalized.portraitDataUrl, normalized.candidateName);
+          setResult((current) => current ? { ...current, preparedPdf: fallbackPdf } : current);
+          setMessage("成稿已生成，原版式同步失败，已切换为标准版 PDF。");
+        } catch {
+          setMessage(pdfError instanceof Error
+            ? `成稿已生成，但 PDF 文件暂未准备好：${pdfError.message}`
+            : "成稿已生成，但 PDF 文件暂未准备好，请稍后重试。");
+        }
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "暂时无法完成整理，请稍后再试。");
     } finally {
@@ -95,5 +111,5 @@ export default function App() {
 }
 
 function RefiningOverlay() {
-  return <div className="refining-overlay" role="status" aria-live="polite" aria-busy="true"><div className="refining-card"><div className="refining-spinner" /><p className="refining-kicker">整理中</p><h2>正在生成简历</h2><p className="refining-note">完成后自动进入成稿页。</p></div></div>;
+  return <div className="refining-overlay" role="status" aria-live="polite" aria-busy="true"><div className="refining-card"><div className="refining-spinner" /><p className="refining-kicker">正在整理</p><h2>正在生成投递版</h2><p className="refining-note">我们正在提炼重点并优化表达，完成后会自动进入成稿页。</p></div></div>;
 }

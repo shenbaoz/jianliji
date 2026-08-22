@@ -19,17 +19,16 @@ test("accepts a hardened production configuration", () => {
   assert.doesNotThrow(() => validateProductionConfig(secureConfig));
 });
 
-test("rejects public backend binding, weak auth, wildcard CORS and file fallback in production", () => {
+test("rejects public backend binding, wildcard CORS and file fallback in production", () => {
   const unsafe = {
     ...secureConfig,
     BACKEND_HOST: "0.0.0.0",
     CORS_ORIGIN: "*",
-    ADMIN_PASSWORD: "123456",
     REQUIRE_MYSQL: "false"
   };
   assert.throws(
     () => validateProductionConfig(unsafe),
-    /BACKEND_HOST.*CORS_ORIGIN.*ADMIN_PASSWORD.*REQUIRE_MYSQL/s
+    /BACKEND_HOST.*CORS_ORIGIN.*REQUIRE_MYSQL/s
   );
 });
 

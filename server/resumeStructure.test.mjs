@@ -44,3 +44,22 @@ test("detects when a resume has no experience entries at all", () => {
   assert.equal(parsed.entryCount, 0);
   assert.ok(parsed.sections.length >= 2);
 });
+
+test("keeps work-experience aliases out of the education section", () => {
+  const resume = `张三
+教育经历
+2020.09 - 2024.06 某大学 新闻学本科
+工作经验
+2024.07 - 至今 某公司 内容运营
+负责公众号选题、撰写与排版。
+技能
+剪映、Excel`;
+  const parsed = parseResumeStructure(resume);
+  const education = parsed.sections.find((section) => section.name === "教育经历");
+  const work = parsed.sections.find((section) => section.name === "工作经验");
+  assert.ok(education);
+  assert.ok(work);
+  assert.equal(work.entries.length, 1);
+  assert.match(work.entries[0].header, /内容运营/);
+  assert.notEqual(education.entries[0]?.header, work.entries[0]?.header);
+});

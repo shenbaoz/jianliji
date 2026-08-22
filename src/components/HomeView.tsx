@@ -85,8 +85,8 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
   return (
     <PageShell
       active="workspace"
-      title="导入简历"
-      description="上传文件后，系统会识别内容并生成可编辑版本。"
+      title="上传你的简历"
+      description="我们会识别现有内容，整理结构，并生成可编辑版本。"
       actions={
         <div className="flex gap-2">
           {resumeLength > 0 && (
@@ -96,7 +96,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
             </button>
           )}
           <button type="button" className="primary-button" onClick={onRefine} disabled={!canContinue || isRefining}>
-            {isRefining ? "整理中…" : "开始整理"}
+            {isRefining ? "生成中…" : "生成投递版"}
             <ArrowRight size={14} />
           </button>
         </div>
@@ -106,8 +106,8 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
         <section className={tab === "edit" ? "workspace-pane workspace-pane-edit" : "workspace-pane workspace-pane-edit is-hidden-mobile"}>
           <header className="workspace-pane-header">
             <div>
-              <h2>导入简历</h2>
-              <p>{resumeLength} 字 · 文件临时保存并定期清理</p>
+              <h2>上传简历</h2>
+              <p>{resumeLength} 字 · 文件仅用于本次整理</p>
             </div>
           </header>
           <div className="workspace-pane-body upload-stage">
@@ -116,14 +116,14 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
               <input
                 value={input.targetRole === "通用求职版" ? "" : input.targetRole}
                 onChange={(event) => update("targetRole", event.target.value)}
-                placeholder="例如：新媒体运营；不填则生成通用版本"
+                placeholder="例如：新媒体运营；不填则生成通用求职版"
               />
             </label>
             <label className="upload-card">
               <input className="sr-only" type="file" accept=".txt,.pdf,.docx" onChange={(event) => handleFile(event.target.files?.[0])} />
               <span className="upload-card-inner">
                 <FileUp size={40} className="upload-card-icon" />
-                <strong className="upload-card-title">选择文件，或拖到这里</strong>
+                <strong className="upload-card-title">上传简历文件</strong>
                 <span className="upload-card-meta">PDF / DOCX / TXT，{resumeUploadLimitText} 以内</span>
                 <em className="upload-card-button">选择文件</em>
                 {fileStatus && <span className="upload-card-status">{fileStatus}</span>}
@@ -146,7 +146,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
               {resumeLength > 0 ? (
                 <ResumeDocument text={input.resumeText} template={previewTemplate} candidateName={input.candidateName} />
               ) : (
-                <div className="resume-empty-state"><div className="resume-empty-state-skeleton" aria-hidden="true"><i /><i /><i /><i /><i /></div><span>上传后将在这里生成预览</span></div>
+                <div className="resume-empty-state"><div className="resume-empty-state-skeleton" aria-hidden="true"><i /><i /><i /><i /><i /></div><span>上传后将在这里预览你的简历</span></div>
               )}
             </div>
           </div>

@@ -4,7 +4,7 @@ import type { WorkflowStep } from "../types";
 export const LandingView = memo(function LandingView({ onNavigate }: { onNavigate: (step: WorkflowStep) => void }) {
   return <section className="apple-style-home">
     <section className="apple-hero-page">
-      <div className="apple-page-copy"><span className="apple-eyebrow">简历记</span><h1>把简历整理成<br /><em>真正能投递的版本。</em></h1><p>上传一份已有的经历，让表达更清晰，结构更完整。</p><button onClick={() => onNavigate("workspace")}>开始优化 <span aria-hidden="true">↗</span></button></div>
+      <div className="apple-page-copy"><span className="apple-eyebrow">简历记</span><h1>把真实经历，整理成<br /><em>更适合投递的简历。</em></h1><p>不编造经历，只把你做过的事写得更具体、更有重点。</p><button onClick={() => onNavigate("workspace")}>开始整理简历 <span aria-hidden="true">↗</span></button></div>
       <div className="apple-resume-visual" aria-hidden="true">
         <div className="resume-paper">
           <div className="resume-paper-top"><div><strong>张思远</strong><span>产品经理</span></div><div className="resume-paper-mark">RESUME</div></div>

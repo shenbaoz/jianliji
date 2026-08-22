@@ -2,7 +2,7 @@ import express from "express";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { createEditedPdfVersions, createGeneratedResumePdf } from "./pdfEditor.mjs";
@@ -10,6 +10,7 @@ import { convertPdfToDocx, editDocxText } from "./wordEditor.mjs";
 import { detectResumeFileType, parseResumeFile, ResumeParseError } from "./resumeParser.mjs";
 import { mergeBasicInfo, normalizeBasicInfo } from "./basicInfoMerge.mjs";
 import { interestSchema, versionSchema } from "./validation.mjs";
+import { normalizeSectionHeadingLines } from "./resumeSectionBoundaries.mjs";
 
 const resumeUploadLimitBytes = 10 * 1024 * 1024;
 const resumeUploadLimitMessage = "文件过大，请上传 10MB 以内的 PDF、DOCX 或 TXT 简历。";
@@ -18,8 +19,9 @@ const defaultUploadDir = resolve("data", "uploads");
 export function createApp(versionStore, interestStore = null, storageStatus = null, creatorStore = null, aiClient = null, options = {}) {
   const app = express();
   const adminSessions = new Map();
-  const adminSessionTtlMs = 8 * 60 * 60 * 1000;
+  const adminSessionTtlMs = 10 * 365 * 24 * 60 * 60 * 1000;
   const healthCheck = typeof options.healthCheck === "function" ? options.healthCheck : null;
+  const usageStore = options.usageStore || null;
   const uploadDir = options.uploadDir || defaultUploadDir;
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -172,11 +174,44 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
           .join("\n")
           .trim()
         : result?.text;
-      res.json({ ...result, text: mergeBasicInfo(text, normalizedBasicInfo) });
+      if (usageStore) {
+        const visitorId = getOptionalVisitorId(req);
+        if (visitorId) {
+          await usageStore.record({
+            visitorId,
+            eventType: sourceMode === "creator" ? "creator_generate" : "resume_optimize"
+          });
+        }
+      }
+      res.json({ ...result, text: normalizeSectionHeadingLines(mergeBasicInfo(text, normalizedBasicInfo)) });
     } catch (error) {
       next(error);
     }
   });
+
+  if (usageStore) {
+    app.post("/api/usage-events", interestLimiter, async (req, res, next) => {
+      try {
+        const eventType = req.body?.eventType;
+        if (eventType !== "resume_optimize" && eventType !== "creator_generate") {
+          res.status(400).json({ error: "使用类型不正确。" });
+          return;
+        }
+        await usageStore.record({ visitorId: getVisitorId(req), eventType });
+        res.status(204).end();
+      } catch (error) {
+        next(error);
+      }
+    });
+
+    app.get("/api/admin/usage-stats", requireAdmin(adminSessions), async (_req, res, next) => {
+      try {
+        res.json(await usageStore.getStats());
+      } catch (error) {
+        next(error);
+      }
+    });
+  }
 
   app.get("/api/admin/session", (req, res) => {
     if (!isAdmin(req, adminSessions)) {
@@ -198,7 +233,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       res.status(401).json({ error: "密码不正确。" });
       return;
     }
-    const token = randomUUID();
+    const token = createPersistentAdminToken();
     adminSessions.set(token, Date.now() + adminSessionTtlMs);
     res.cookie("resume_admin_session", token, {
       httpOnly: true,
@@ -590,20 +625,41 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
   return app;
 }
 
-function requireAdmin(_sessions) {
-  return (_req, _res, next) => {
+function requireAdmin(sessions) {
+  return (req, res, next) => {
+    if (!isAdmin(req, sessions)) {
+      res.status(401).json({ error: "管理员登录已失效，请重新登录。" });
+      return;
+    }
     next();
   };
 }
 
 function isAdmin(req, sessions) {
   const token = readCookie(req, "resume_admin_session");
-  if (!token || !sessions.has(token)) return false;
-  if (Date.now() > sessions.get(token)) {
+  if (!token) return false;
+  if (sessions.has(token)) {
+    if (Date.now() <= sessions.get(token)) return true;
     sessions.delete(token);
-    return false;
   }
-  return true;
+  return verifyPersistentAdminToken(token);
+}
+
+function createPersistentAdminToken() {
+  const payload = "permanent";
+  return `${payload}.${signAdminPayload(payload)}`;
+}
+
+function verifyPersistentAdminToken(token) {
+  const match = /^permanent\.([a-f0-9]{64})$/.exec(token);
+  if (!match) return false;
+  const expected = Buffer.from(signAdminPayload("permanent"), "hex");
+  const supplied = Buffer.from(match[1], "hex");
+  return expected.length === supplied.length && timingSafeEqual(expected, supplied);
+}
+
+function signAdminPayload(payload) {
+  return createHmac("sha256", `resume-admin:${process.env.ADMIN_PASSWORD || ""}`).update(payload).digest("hex");
 }
 
 function readCookie(req, name) {
@@ -691,4 +747,9 @@ function getVisitorId(req) {
     throw new Error("Visitor id is required");
   }
   return visitorId;
+}
+
+function getOptionalVisitorId(req) {
+  const visitorId = req.get("X-Visitor-Id");
+  return typeof visitorId === "string" && /^[a-zA-Z0-9_-]{16,80}$/.test(visitorId) ? visitorId : "";
 }

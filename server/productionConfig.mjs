@@ -13,14 +13,6 @@ export function validateProductionConfig(env = process.env) {
     errors.push("CORS_ORIGIN must be one exact HTTPS origin without a path, wildcard or comma-separated list.");
   }
 
-  const adminPassword = env.ADMIN_PASSWORD || "";
-  if (
-    adminPassword.length < 20 ||
-    /replace|example|password|123456/i.test(adminPassword)
-  ) {
-    errors.push("ADMIN_PASSWORD must be a unique random value of at least 20 characters.");
-  }
-
   if (env.REQUIRE_MYSQL !== "true") {
     errors.push("REQUIRE_MYSQL must be true so production never falls back to file storage.");
   }

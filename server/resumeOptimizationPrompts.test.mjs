@@ -117,3 +117,16 @@ test("existing-resume prompts preserve the source owner of every experience item
     assert.match(prompt, /归属不明/);
   }
 });
+
+test("existing-resume prompts preserve work and education section boundaries", () => {
+  const resumeInput = { ...input, sourceMode: "resume" };
+  const prompts = [
+    buildStrategyMessages(resumeInput),
+    buildRewriteMessages(resumeInput, {}),
+    buildQaMessages(resumeInput, {}, "正文")
+  ].flat().map((item) => item.content).join("\n");
+
+  assert.match(prompts, /工作经历/);
+  assert.match(prompts, /教育经历/);
+  assert.match(prompts, /不得.*教育.*工作|不得.*工作.*教育/);
+});

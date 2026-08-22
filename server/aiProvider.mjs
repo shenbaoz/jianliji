@@ -3,6 +3,7 @@ const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const mainlandIdPattern = /(?<!\d)\d{17}[\dXx](?!\d)/g;
 const addressPattern = /(?:北京市|上海市|天津市|重庆市|[\u4e00-\u9fff]{2,8}省)[^，。；;\n]{0,36}(?:路|街|道|巷|弄|小区)[^，。；;\n]{0,20}(?:\d+[号室栋单元]?|号|室)/g;
 const toolPattern = /(?:\b(?:Excel|Python|SQL|Tableau|Power\s?BI|Figma|Axure|React|TypeScript|JavaScript|Photoshop|Premiere)\b|剪映|秀米|135编辑器)/gi;
+import { normalizeSectionHeadingLines, preserveExperienceSections } from "./resumeSectionBoundaries.mjs";
 
 export function redactResumeContacts(text) {
   const replacements = new Map();
@@ -442,10 +443,13 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
       redacted.replacements
     );
     const draft = sanitizeResumeDraft(parsed?.text, sourceText);
-    const text = restoreSourceContact(
-      restoreCandidateName(restoreContacts(draft, redacted.replacements), candidateName),
+    const text = normalizeSectionHeadingLines(preserveExperienceSections(
+      restoreSourceContact(
+        restoreCandidateName(restoreContacts(draft, redacted.replacements), candidateName),
+        sourceText
+      ),
       sourceText
-    );
+    ));
     const changes = Array.isArray(parsed?.changes)
       ? parsed.changes
         .filter((change) => change && typeof change.before === "string" && typeof change.after === "string")
@@ -527,17 +531,23 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
       const strategyRaw = await completeWithRetry(buildStrategyMessages(input), true, 900, undefined, deadlineAt);
       const strategy = await parseJsonContent(strategyRaw, { mode: sourceMode === "creator" ? "creator" : "novice", targetRole, keywords: [], priorityEvidence: [], deprioritizedEvidence: [], gaps: [], highlights: [], evidence: [], structure: [] });
       let draft = await completeWithRetry(buildRewriteMessages(input, strategy), false, 2200, undefined, deadlineAt);
-      const qaRaw = await completeWithRetry(buildQaMessages(input, strategy, draft), true, 3200, undefined, deadlineAt);
-      const qa = await parseJsonContent(qaRaw, { verdict: "ready", score: 85, issues: [], suggestions: [] });
-      if (typeof qa.finalText === "string" && qa.finalText.trim()) draft = qa.finalText.trim();
-      draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
+      // 超长履历的输入 token 量很高；跳过第三次 AI 质检调用，避免真实长 CV 在网关等待窗口内 504。
+      // 本地事实校验、经历边界保护和未验证信息清理仍然照常执行。
+      const isLongResume = sourceMode === "resume" && resumeText.length > 12_000;
+      let qa = { verdict: "ready", score: 80, issues: [], suggestions: [] };
+      if (!isLongResume) {
+        const qaRaw = await completeWithRetry(buildQaMessages(input, strategy, draft), true, 3200, undefined, deadlineAt);
+        qa = await parseJsonContent(qaRaw, { verdict: "ready", score: 85, issues: [], suggestions: [] });
+        if (typeof qa.finalText === "string" && qa.finalText.trim()) draft = qa.finalText.trim();
+      }
+      draft = normalizeSectionHeadingLines(preserveExperienceSections(sanitizeResumeDraft(draft, resumeText, evidenceAnswers), resumeText));
       let quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa, strategy });
       let autoStripped = false;
       // 最多两轮修复：让 AI 依据未验证清单自己删改并保持句子通顺（比删 token 保留更多语义）
       let repairCount = 0;
       while (!quality.passed && repairCount < 2) {
         draft = await completeWithRetry(buildRepairMessages(input, strategy, draft, quality.checks), false, 2200, undefined, deadlineAt);
-        draft = sanitizeResumeDraft(draft, resumeText, evidenceAnswers);
+        draft = normalizeSectionHeadingLines(preserveExperienceSections(sanitizeResumeDraft(draft, resumeText, evidenceAnswers), resumeText));
         quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft, sourceMode, qa: { verdict: "ready", score: qa.score || 80 }, strategy });
         repairCount += 1;
       }
@@ -551,10 +561,10 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
           autoStripped = true;
         }
       }
-      const text = restoreSourceContact(
+      const text = normalizeSectionHeadingLines(restoreSourceContact(
         restoreCandidateName(restoreContacts(draft, redacted.replacements), extractCandidateName(resumeText)),
         resumeText
-      );
+      ));
       const highlights = Array.isArray(quality.highlights) ? quality.highlights.slice(0, 3) : [];
       if (autoStripped) highlights.push("AI 生成的部分内容未在你的简历中找到，已自动移除，确保成稿只保留真实信息。");      return { provider, model, text, suggestions: Array.isArray(qa.suggestions) ? qa.suggestions.slice(0, 3) : [], reviewFlags: quality.reviewFlags, safe: quality.reviewFlags.length === 0, highlights: highlights.slice(0, 3), quality: { verdict: quality.passed ? "ready" : "needs_evidence", score: quality.score, checks: quality.checks, positive: quality.positive, highlights: highlights.slice(0, 3) } };
     }

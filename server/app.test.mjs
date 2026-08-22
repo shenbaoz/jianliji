@@ -23,11 +23,23 @@ function createStores() {
     }
   ];
   return {
-    versionStore: { list: async () => [], save: async (value) => value, delete: async () => {} },
+    versionStore: {
+      list: async () => [],
+      listAll: async () => [],
+      save: async (value) => value,
+      delete: async () => {},
+      deleteAny: async () => {},
+      deleteAll: async () => {}
+    },
     interestStore: {
       list: async () => leads,
       save: async (value) => value,
       delete: async () => {}
+    },
+    usageStore: {
+      events: [],
+      record: async function (event) { this.events.push(event); },
+      getStats: async () => ({ optimizationUsers: 2, optimizationRuns: 3, creatorUsers: 1, creatorRuns: 1 })
     }
   };
 }
@@ -104,43 +116,47 @@ test("creator API stores a draft for its anonymous visitor only", async () => {
   }
 });
 
-test("administrator data requires a password-backed session", async () => {
-  const originalPassword = process.env.ADMIN_PASSWORD;
-  process.env.ADMIN_PASSWORD = "correct horse battery staple";
-  try {
-    await withServer(async (baseUrl) => {
-      const publicCreate = await fetch(`${baseUrl}/api/interest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "result", planId: "jd-fit" })
-      });
-      assert.equal(publicCreate.status, 201);
-
-      const unauthenticated = await fetch(`${baseUrl}/api/interest`);
-      assert.equal(unauthenticated.status, 401);
-
-      const login = await fetch(`${baseUrl}/api/admin/session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: process.env.ADMIN_PASSWORD })
-      });
-      assert.equal(login.status, 204);
-      const cookie = login.headers.get("set-cookie");
-      assert.match(cookie || "", /HttpOnly/);
-
-      const authenticated = await fetch(`${baseUrl}/api/interest`, { headers: { Cookie: cookie || "" } });
-      assert.equal(authenticated.status, 200);
-      assert.equal((await authenticated.json())[0].id, "lead-1");
+test("administrator data requires a password while customer feedback remains public to submit", async () => {
+  await withServer(async (baseUrl) => {
+    const publicCreate = await fetch(`${baseUrl}/api/interest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "result", planId: "jd-fit" })
     });
+    assert.equal(publicCreate.status, 201);
+
+    const publicInterest = await fetch(`${baseUrl}/api/interest`);
+    assert.equal(publicInterest.status, 401);
+
+    const publicVersions = await fetch(`${baseUrl}/api/admin/versions`);
+    assert.equal(publicVersions.status, 401);
+  });
+});
+
+test("usage events are public to record but usage stats require administrator auth", async () => {
+  const stores = createStores();
+  const app = createApp(stores.versionStore, stores.interestStore, null, null, null, { usageStore: stores.usageStore });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+  try {
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    const recorded = await fetch(`${baseUrl}/api/usage-events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Visitor-Id": "visitor-a1b2c3d4" },
+      body: JSON.stringify({ eventType: "resume_optimize" })
+    });
+    assert.equal(recorded.status, 204);
+    assert.deepEqual(stores.usageStore.events[0], { visitorId: "visitor-a1b2c3d4", eventType: "resume_optimize" });
+
+    const publicStats = await fetch(`${baseUrl}/api/admin/usage-stats`);
+    assert.equal(publicStats.status, 401);
   } finally {
-    if (originalPassword === undefined) delete process.env.ADMIN_PASSWORD;
-    else process.env.ADMIN_PASSWORD = originalPassword;
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 });
 
-test("administrator versions use an all-visitor route while visitors can delete only their own data", async () => {
-  const originalPassword = process.env.ADMIN_PASSWORD;
-  process.env.ADMIN_PASSWORD = "correct horse battery staple";
+test("administrator version routes reject unauthenticated access", async () => {
   const calls = [];
   const versionStore = {
     list: async (visitorId) => [{ id: "own", visitorId }],
@@ -156,36 +172,21 @@ test("administrator versions use an all-visitor route while visitors can delete 
   });
   try {
     const baseUrl = `http://127.0.0.1:${server.address().port}`;
-    assert.equal((await fetch(`${baseUrl}/api/admin/versions`)).status, 401);
-
-    const login = await fetch(`${baseUrl}/api/admin/session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: process.env.ADMIN_PASSWORD })
-    });
-    const cookie = login.headers.get("set-cookie") || "";
-    const listed = await fetch(`${baseUrl}/api/admin/versions`, { headers: { Cookie: cookie } });
-    assert.equal(listed.status, 200);
-    assert.equal((await listed.json())[0].visitorId, "visitor-b");
+    const listed = await fetch(`${baseUrl}/api/admin/versions`);
+    assert.equal(listed.status, 401);
 
     const removedByAdmin = await fetch(`${baseUrl}/api/admin/versions/${encodeURIComponent("visitor-b:shared")}`, {
-      method: "DELETE",
-      headers: { Cookie: cookie }
+      method: "DELETE"
     });
-    assert.equal(removedByAdmin.status, 204);
+    assert.equal(removedByAdmin.status, 401);
 
     const removedOwn = await fetch(`${baseUrl}/api/versions`, {
       method: "DELETE",
       headers: { "X-Visitor-Id": "visitor-a1b2c3d4" }
     });
     assert.equal(removedOwn.status, 204);
-    assert.deepEqual(calls, [
-      ["deleteAny", "visitor-b:shared"],
-      ["deleteAll", "visitor-a1b2c3d4"]
-    ]);
+    assert.deepEqual(calls, [["deleteAll", "visitor-a1b2c3d4"]]);
   } finally {
-    if (originalPassword === undefined) delete process.env.ADMIN_PASSWORD;
-    else process.env.ADMIN_PASSWORD = originalPassword;
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 });

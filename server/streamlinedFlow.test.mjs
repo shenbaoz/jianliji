@@ -23,14 +23,14 @@ test("public refinement shows neutral progress and does not expose AI, score, or
   ]);
   const publicSurface = `${start}\n${landing}\n${editor}`;
 
-  assert.match(app, /正在生成简历/);
+  assert.match(app, /正在生成投递版/);
   assert.doesNotMatch(publicSurface, /DeepSeek|Kimi|AI |ATS|评分|匹配度|岗位分析|招聘者质检/);
 });
 
 test("completion presents a clean refined resume, concrete changes, and one download action", async () => {
   const editor = await read("src/components/EditorView.tsx");
 
-  assert.match(editor, /可投递成稿/);
+  assert.match(editor, /投递版预览/);
   assert.match(editor, /ResumeDocument/);
   assert.match(editor, /preparedPdf\?\.portraitDataUrl/);
   assert.match(editor, /已删减|已整理|已重写/);
@@ -43,7 +43,7 @@ test("the public header contains only home and resume navigation", async () => {
   const header = await read("src/components/Header.tsx");
 
   assert.doesNotMatch(header, /案例库|onOpenCases/);
-  assert.match(header, /开始优化/);
+  assert.match(header, /开始整理/);
 });
 
 test("completion exports a generated PDF instead of relying on the browser print dialog", async () => {

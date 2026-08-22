@@ -7,7 +7,10 @@ mangle some CJK glyphs in PyMuPDF-generated files.
 """
 
 import json
+import os
+import subprocess
 import sys
+import tempfile
 
 import pymupdf
 
@@ -22,9 +25,65 @@ def main():
         document = pymupdf.open(path)
         try:
             pages = [page.get_text() for page in document]
+            text = "\n".join(pages)
+            if text.strip():
+                print(json.dumps({"ok": True, "text": text}, ensure_ascii=False))
+                return
+            # Scanned resumes have no text layer. Use the server's optional
+            # Tesseract installation as a deterministic OCR fallback.
+            ocr_pages = []
+            languages = "chi_sim+eng"
+            try:
+                language_probe = subprocess.run(
+                    ["tesseract", "--list-langs"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=10,
+                    check=False,
+                )
+                available_languages = language_probe.stdout
+                if "eng" not in available_languages:
+                    languages = "chi_sim"
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                available_languages = ""
+            with tempfile.TemporaryDirectory(prefix="resume-ocr-") as temp_dir:
+                for index, page in enumerate(document):
+                    # A 1x render is materially faster on the small production
+                    # host while retaining enough resolution for normal CV text.
+                    pixmap = page.get_pixmap(matrix=pymupdf.Matrix(1, 1), alpha=False)
+                    image_path = os.path.join(temp_dir, f"page-{index + 1}.png")
+                    pixmap.save(image_path)
+                    try:
+                        result = subprocess.run(
+                            ["tesseract", image_path, "stdout", "-l", languages, "-psm", "6"],
+                            capture_output=True,
+                            text=True,
+                            encoding="utf-8",
+                            timeout=75,
+                            check=False,
+                        )
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                        break
+                    if result.returncode == 0 and result.stdout.strip():
+                        ocr_pages.append(result.stdout)
+            text = "\n".join(ocr_pages)
+            # Never pass visibly corrupted OCR into the optimizer. A clear
+            # actionable upload error is safer than silently rewriting a
+            # resume from mangled characters.
+            compact_text = "".join(text.split())
+            allowed_characters = sum(
+                1
+                for character in compact_text
+                if character.isalnum()
+                or "\u4e00" <= character <= "\u9fff"
+                or character in "，。！？：；、（）《》「」“”‘’—·…,.!?/:;()[]-+@#%&"
+            )
+            if len(compact_text) < 20 or allowed_characters / max(len(compact_text), 1) < 0.85:
+                text = ""
         finally:
             document.close()
-        print(json.dumps({"ok": True, "text": "\n".join(pages)}, ensure_ascii=False))
+        print(json.dumps({"ok": True, "text": text}, ensure_ascii=False))
     except Exception as error:  # noqa: BLE001 - report anything to the caller
         print(json.dumps({"ok": False, "error": str(error)}, ensure_ascii=False))
 

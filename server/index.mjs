@@ -9,6 +9,8 @@ import { createInterestStore } from "./interestStore.mjs";
 import { createMysqlInterestStore } from "./mysqlInterestStore.mjs";
 import { createCreatorStore } from "./creatorStore.mjs";
 import { createVersionStore } from "./versionStore.mjs";
+import { createUsageEventStore } from "./usageEventStore.mjs";
+import { createMysqlUsageEventStore } from "./mysqlUsageEventStore.mjs";
 import { createDeepSeekClient, createFallbackAiClient, createKimiClient } from "./aiProvider.mjs";
 import { validateProductionConfig } from "./productionConfig.mjs";
 
@@ -26,7 +28,7 @@ let cleanupTimer = null;
 let cleanupRunning = false;
 let server = null;
 
-const { versionStore, interestStore, creatorStore, storageStatus } = await createStores();
+const { versionStore, interestStore, creatorStore, usageStore, storageStatus } = await createStores();
 
 const deepSeekClient = process.env.DEEPSEEK_API_KEY ? createDeepSeekClient() : null;
 const kimiClient = process.env.KIMI_API_KEY ? createKimiClient() : null;
@@ -36,7 +38,7 @@ const healthCheck = async () => {
   await dbPool.query("SELECT 1");
   return true;
 };
-const app = createApp(versionStore, interestStore, storageStatus, creatorStore, aiClient, { healthCheck });
+const app = createApp(versionStore, interestStore, storageStatus, creatorStore, aiClient, { healthCheck, usageStore });
 server = app.listen(port, process.env.BACKEND_HOST || "127.0.0.1", () => {
   console.log(`Resume backend listening on http://127.0.0.1:${port}`);
   startUploadCleanup();
@@ -124,16 +126,19 @@ async function createStores() {
     const mysqlVersionStore = createVersionStore(db);
     const mysqlInterestStore = createMysqlInterestStore(db);
     const mysqlCreatorStore = createCreatorStore(db);
+    const mysqlUsageStore = createMysqlUsageEventStore(db);
     try {
       await mysqlVersionStore.ensureSchema();
       await mysqlInterestStore.ensureSchema();
       await mysqlCreatorStore.ensureSchema();
+      await mysqlUsageStore.ensureSchema();
       console.log("Resume backend using MySQL storage.");
       dbPool = db;
       return {
         versionStore: mysqlVersionStore,
         interestStore: mysqlInterestStore,
         creatorStore: mysqlCreatorStore,
+        usageStore: mysqlUsageStore,
         storageStatus: {
           mode: "mysql",
           label: "MySQL 数据库（简历版本 + 留资）",
@@ -151,15 +156,19 @@ async function createStores() {
 
   const versionFilePath = resolve("data", "resume-versions.json");
   const interestFilePath = resolve("data", "unlock-interest.json");
+  const usageFilePath = resolve("data", "usage-events.json");
   console.log(`Using file storage at ${versionFilePath}.`);
   const fileVersionStore = createFileVersionStore(versionFilePath);
   const fileInterestStore = createInterestStore(interestFilePath);
+  const fileUsageStore = createUsageEventStore(usageFilePath);
   await fileVersionStore.ensureSchema();
   await fileInterestStore.ensureSchema();
+  await fileUsageStore.ensureSchema();
   return {
     versionStore: fileVersionStore,
     interestStore: fileInterestStore,
     creatorStore: null,
+    usageStore: fileUsageStore,
     storageStatus: {
       mode: "file",
       label: "服务器文件存储",

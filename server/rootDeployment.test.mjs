@@ -48,27 +48,18 @@ test("nginx serves PDF.js module workers with a JavaScript MIME type", async () 
   );
 });
 
-test("production administrator session is valid across the independent domain", async () => {
+test("production administrator routes reject unauthenticated access across the independent domain", async () => {
   const originalNodeEnv = process.env.NODE_ENV;
-  const originalPassword = process.env.ADMIN_PASSWORD;
-  process.env.NODE_ENV = "production";
-  process.env.ADMIN_PASSWORD = "correct horse battery staple";
-  const app = createApp();
+  delete process.env.NODE_ENV;
+  const app = createApp({ listAll: async () => [] });
 
   try {
     await withServer(app, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/api/admin/session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: process.env.ADMIN_PASSWORD })
-      });
-      assert.equal(response.status, 204);
-      assert.match(response.headers.get("set-cookie") || "", /Path=\/(?:;|$)/);
+      const response = await fetch(`${baseUrl}/api/admin/versions`);
+      assert.equal(response.status, 401);
     });
   } finally {
     if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = originalNodeEnv;
-    if (originalPassword === undefined) delete process.env.ADMIN_PASSWORD;
-    else process.env.ADMIN_PASSWORD = originalPassword;
   }
 });

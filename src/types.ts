@@ -95,3 +95,10 @@ export type UnlockInterest = {
   contact: string;
   note: string;
 };
+
+export type AdminUsageStats = {
+  optimizationUsers: number;
+  optimizationRuns: number;
+  creatorUsers: number;
+  creatorRuns: number;
+};

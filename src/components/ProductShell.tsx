@@ -10,9 +10,9 @@ type Stage = {
 };
 
 const workflowStages: Stage[] = [
-  { id: "workspace", label: "导入简历", helper: "", icon: <FileUp size={16} /> },
+  { id: "workspace", label: "上传简历", helper: "", icon: <FileUp size={16} /> },
   { id: "job", label: "求职方向", helper: "", icon: <Target size={16} /> },
-  { id: "editor", label: "AI 生成简历", helper: "", icon: <Brain size={16} /> }
+  { id: "editor", label: "生成投递版", helper: "", icon: <Brain size={16} /> }
 ];
 
 export function PageShell({
