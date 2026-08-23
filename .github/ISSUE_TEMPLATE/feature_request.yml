@@ -1,0 +1,25 @@
+name: 功能建议
+description: 提交基于真实使用场景的改进建议
+title: "[建议] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 使用场景
+      description: 你在什么情况下遇到了什么困难？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 你希望产品如何改进？
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: 预期价值
+      description: 这项改进会帮助哪些用户？

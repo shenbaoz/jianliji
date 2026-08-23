@@ -1,0 +1,38 @@
+name: 错误报告
+description: 报告可以稳定复现的产品问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: 请勿上传包含姓名、电话、邮箱等个人信息的真实简历。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题描述
+      description: 请说明实际发生了什么，以及你期望的结果。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开……
+        2. 点击……
+        3. 出现……
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 使用环境
+      description: 浏览器、操作系统和设备类型。
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 可提供已脱敏的截图或错误提示。

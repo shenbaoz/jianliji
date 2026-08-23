@@ -2,12 +2,16 @@ node_modules/
 dist/
 .env
 .env.local
+.env.*
+!.env.example
 data/*.json
 data/uploads/
 npm-debug.log*
 
 # 发布产物与临时目录
 deploy/*.tar.gz
+*.tar.gz
+*.zip
 release-*/
 tmp/
 __pycache__/
