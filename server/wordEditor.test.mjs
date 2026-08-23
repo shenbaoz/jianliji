@@ -124,6 +124,7 @@ test("generated-template mode disables table detection so the top-right photo su
 });
 
 async function createTemplatePdf(pdfPath) {
+  const fontPath = (process.env.CHINESE_FONT_PATH || "C:\\Windows\\Fonts\\simhei.ttf").replaceAll("\\", "/");
   const script = [
     "import pymupdf",
     "import io",
@@ -132,7 +133,7 @@ async function createTemplatePdf(pdfPath) {
     `out = ${JSON.stringify(pdfPath)}`,
     "doc = pymupdf.open()",
     "page = doc.new_page(width=595, height=842)",
-    "page.insert_font(fontname='CN', fontfile=r'C:\\Windows\\Fonts\\simhei.ttf')",
+    `page.insert_font(fontname='CN', fontfile=${JSON.stringify(fontPath)})`,
     "page.insert_text((46, 50), '测试用户', fontname='CN', fontsize=21)",
     "page.draw_line((46, 84), (549, 84), color=(0.08, 0.28, 0.24), width=1.5)",
     "buf = io.BytesIO()",
