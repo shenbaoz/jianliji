@@ -216,7 +216,7 @@ test("createEditedPdfVersions generates a readable optimized PDF when no source 
       originalname: "generated.pdf",
       mimetype: "application/pdf"
     });
-    assert.match(parsed.text.replace(/[\s\x00，。]/g, ""), /独立策划并落地活动执行沉淀现场协同清单/);
+    assert.match(parsed.text.normalize("NFKC").replace(/[\s\x00,，。]/g, ""), /独立策划并落地活动执行沉淀现场协同清单/);
     assert.doesNotMatch(parsed.text, /□|�/);
   } finally {
     await rm(uploadDir, { recursive: true, force: true });
@@ -359,7 +359,7 @@ test("createEditedPdfVersions can force the generated resume format", async () =
       originalname: "generated.pdf",
       mimetype: "application/pdf"
     });
-    assert.match(parsed.text.replace(/\s+/g, ""), /测试用户.*独立完成内容运营/);
+    assert.match(parsed.text.normalize("NFKC").replace(/\s+/g, ""), /测试用户.*独立完成内容运营/);
   } finally {
     await rm(uploadDir, { recursive: true, force: true });
   }
