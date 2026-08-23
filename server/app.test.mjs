@@ -133,6 +133,47 @@ test("administrator data requires a password while customer feedback remains pub
   });
 });
 
+test("administrator logout invalidates the active session cookie", async () => {
+  const previousPassword = process.env.ADMIN_PASSWORD;
+  process.env.ADMIN_PASSWORD = "test-admin-password-2026";
+  try {
+    const { versionStore, interestStore } = createStores();
+    const app = createApp(versionStore, interestStore);
+    const server = await new Promise((resolve) => {
+      const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+    });
+    try {
+      const baseUrl = `http://127.0.0.1:${server.address().port}`;
+      const login = await fetch(`${baseUrl}/api/admin/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: process.env.ADMIN_PASSWORD })
+      });
+      assert.equal(login.status, 204);
+      const cookie = login.headers.get("set-cookie");
+      assert.match(cookie || "", /resume_admin_session=/);
+      assert.doesNotMatch(cookie || "", /Max-Age=315360000/);
+
+      const active = await fetch(`${baseUrl}/api/admin/session`, { headers: { Cookie: cookie } });
+      assert.equal(active.status, 204);
+
+      const logout = await fetch(`${baseUrl}/api/admin/session`, {
+        method: "DELETE",
+        headers: { Cookie: cookie }
+      });
+      assert.equal(logout.status, 204);
+
+      const afterLogout = await fetch(`${baseUrl}/api/admin/session`, { headers: { Cookie: cookie } });
+      assert.equal(afterLogout.status, 401);
+    } finally {
+      await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    }
+  } finally {
+    if (previousPassword === undefined) delete process.env.ADMIN_PASSWORD;
+    else process.env.ADMIN_PASSWORD = previousPassword;
+  }
+});
+
 test("usage events are public to record but usage stats require administrator auth", async () => {
   const stores = createStores();
   const app = createApp(stores.versionStore, stores.interestStore, null, null, null, { usageStore: stores.usageStore });
@@ -151,6 +192,28 @@ test("usage events are public to record but usage stats require administrator au
 
     const publicStats = await fetch(`${baseUrl}/api/admin/usage-stats`);
     assert.equal(publicStats.status, 401);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+});
+
+test("successful optimization records an anonymous device id when the visitor header is absent", async () => {
+  const stores = createStores();
+  const app = createApp(stores.versionStore, stores.interestStore, null, null, {
+    optimize: async () => ({ text: "核心优势\n负责内容整理", safe: true })
+  }, { usageStore: stores.usageStore });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/ai/optimize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resumeText: "负责内容整理", targetRole: "内容运营", sourceMode: "resume" })
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(stores.usageStore.events[0].visitorId, /^device-[a-f0-9]{40}$/);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
@@ -364,12 +427,13 @@ test("AI optimize endpoint accepts the three-step flow without a company job des
     const response = await fetch(`http://127.0.0.1:${server.address().port}/api/ai/optimize`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Visitor-Id": "ai-no-jd-a1b2c3d4" },
-      body: JSON.stringify({ resumeText: "校园项目与内容运营经历", targetRole: "内容运营", jobDescription: "" })
+      body: JSON.stringify({ resumeText: "校园项目与内容运营经历", targetRole: "内容运营", jobDescription: "", fastPolish: true })
     });
 
     assert.equal(response.status, 200);
     assert.equal((await response.json()).text, "通用投递版简历");
     assert.equal(received.jobDescription, "");
+    assert.equal(received.fastPolish, true);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }

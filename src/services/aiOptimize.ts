@@ -16,6 +16,7 @@ export async function optimizeWithDeepSeek(input: ResumeInput, evidenceAnswers: 
         jobDescription: input.jobDescription,
         evidenceAnswers,
         sourceMode: input.sourceMode || "resume",
+        fastPolish: (input.sourceMode || "resume") === "resume",
         skippedFollowUp,
         basicInfo: input.basicInfo || undefined
       }),

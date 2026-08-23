@@ -107,6 +107,16 @@ test("parseResumeFile extracts a name from spaced labels used by exported PDFs",
   assert.equal(result.candidateName, "杜小艳");
 });
 
+test("parseResumeFile prefers a Chinese name joined to a role over a social-platform label", async () => {
+  const result = await parseResumeFile({
+    originalname: "public-android-resume.txt",
+    mimetype: "text/plain",
+    buffer: Buffer.from("1/4\n屈超安卓开发工程师\n联系电话：137-9848-1262\n电子邮箱：chao.qu521@gmail.com\nGitHub：github.com/JsonChao\n掘金\n：https://juejin.im/user/example\n专业技能", "utf8")
+  });
+
+  assert.equal(result.candidateName, "屈超");
+});
+
 test("parseResumeFile keeps multi-line personal fields separate and detects education details", async () => {
   const result = await parseResumeFile({
     originalname: "two-column-resume.txt",

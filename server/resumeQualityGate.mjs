@@ -199,9 +199,14 @@ function findLostSectionGroups(sourceText, draft) {
       .map((line) => line.replace(/[:：]$/, ""))
   );
   if (!sourceHeadings.size) return [];
-  const draftText = String(draft || "");
+  const draftHeadings = new Set(
+    String(draft || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim().replace(/[:：]$/, ""))
+      .filter((line) => SECTION_HEADING_PATTERN.test(line))
+  );
   return SECTION_HEADING_GROUPS
-    .filter((group) => group.some((heading) => sourceHeadings.has(heading)) && !group.some((heading) => draftText.includes(heading)))
+    .filter((group) => group.some((heading) => sourceHeadings.has(heading)) && !group.some((heading) => draftHeadings.has(heading)))
     .map((group) => group[0]);
 }
 

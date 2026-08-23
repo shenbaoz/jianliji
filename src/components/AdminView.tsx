@@ -13,9 +13,7 @@ import type { AdminUsageStats, UnlockInterest } from "../types";
 const planLabels: Record<string, string> = {
   "feedback-9-9": "9.9 元",
   "feedback-19-9": "19.9 元",
-  "feedback-29-9": "29.9 元",
-  "feedback-not-willing": "暂不付费",
-  "feedback-19-9-plus": "19.9 元及以上"
+  "feedback-29-9": "29.9 元"
 };
 
 export function AdminView() {
@@ -26,7 +24,7 @@ export function AdminView() {
   const [rows, setRows] = useState<UnlockInterest[]>([]);
   const [query, setQuery] = useState("");
   const [updatedAt, setUpdatedAt] = useState("");
-  const [usageStats, setUsageStats] = useState<AdminUsageStats>({ optimizationUsers: 0, optimizationRuns: 0, creatorUsers: 0, creatorRuns: 0 });
+  const [usageStats, setUsageStats] = useState<AdminUsageStats>({ optimizationUsers: 0, optimizationRuns: 0, creatorUsers: 0, creatorRuns: 0, recentEvents: [] });
   const [loadError, setLoadError] = useState("");
 
   const refresh = async () => {
@@ -35,6 +33,13 @@ export function AdminView() {
     if (feedbackResult.status === "fulfilled") setRows(feedbackResult.value);
     if (usageResult.status === "fulfilled") setUsageStats(usageResult.value);
     const errors = [feedbackResult, usageResult].filter((item): item is PromiseRejectedResult => item.status === "rejected");
+    if (errors.some((item) => isAdminSessionError(item.reason))) {
+      setAuthenticated(false);
+      setRows([]);
+      setUsageStats({ optimizationUsers: 0, optimizationRuns: 0, creatorUsers: 0, creatorRuns: 0, recentEvents: [] });
+      setLoadError("管理员登录已失效，请重新登录。");
+      return;
+    }
     if (errors.length > 0) setLoadError(errors.map((item) => item.reason instanceof Error ? item.reason.message : "后台数据读取失败，请刷新重试。").join(" "));
     setUpdatedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
   };
@@ -64,8 +69,26 @@ export function AdminView() {
 
   const removeRow = async (id: string) => {
     if (!window.confirm("确定删除这条顾客反馈？")) return;
-    await deleteUnlockInterest(id);
-    await refresh();
+    try {
+      await deleteUnlockInterest(id);
+      await refresh();
+    } catch (error) {
+      if (isAdminSessionError(error)) {
+        setAuthenticated(false);
+        setLoadError("管理员登录已失效，请重新登录。");
+        return;
+      }
+      setLoadError(error instanceof Error ? error.message : "删除反馈失败，请稍后重试。");
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      await logoutAdmin();
+      setAuthenticated(false);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "退出登录失败，请稍后重试。");
+    }
   };
 
   const exportCsv = () => {
@@ -111,7 +134,7 @@ export function AdminView() {
   }
 
   const filtered = filterRows(rows, query);
-  const votes = ["feedback-9-9", "feedback-19-9", "feedback-29-9", "feedback-not-willing", "feedback-19-9-plus"].map((planId) => ({
+  const votes = ["feedback-9-9", "feedback-19-9", "feedback-29-9"].map((planId) => ({
     planId,
     label: planLabels[planId],
     count: rows.filter((row) => row.planId === planId).length
@@ -124,7 +147,7 @@ export function AdminView() {
         <div className="admin-actions">
           <button type="button" className="secondary-button" onClick={exportCsv}><Download size={16} />导出反馈</button>
           <button type="button" className="secondary-button" onClick={() => void refresh()}><RefreshCcw size={16} />刷新</button>
-          <button type="button" className="secondary-button" onClick={() => void logoutAdmin().then(() => setAuthenticated(false))}><LogOut size={16} />退出</button>
+          <button type="button" className="secondary-button" onClick={() => void signOut()}><LogOut size={16} />退出</button>
         </div>
       </header>
       <main className="page-shell admin-shell">
@@ -146,6 +169,13 @@ export function AdminView() {
           </div>
         </section>
         <section className="panel">
+          <div className="panel-title"><div><span className="eyebrow">最近使用</span><h2>用户基础信息</h2><p>只显示成功生成记录，不保存简历正文和联系方式。</p></div></div>
+          <div className="admin-table">
+            {usageStats.recentEvents.map((event) => <article className="admin-record-row" key={event.id}><div><strong>{event.candidateName || "未填写姓名"}</strong><span>{event.eventType === "creator_generate" ? "小白生成" : "已有简历优化"} · {event.targetRole || "未填写方向"} · {formatDate(event.createdAt)}</span><em>{[event.school, event.major, event.degree].filter(Boolean).join(" · ") || "未填写学校、专业或学历"}</em></div></article>)}
+            {usageStats.recentEvents.length === 0 && <div className="admin-empty-row">暂时没有使用记录。</div>}
+          </div>
+        </section>
+        <section className="panel">
           <div className="admin-filter-bar"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名、岗位、反馈或联系方式" /></div>
           <div className="admin-table">
             {filtered.map((row) => <article className="admin-record-row" key={row.id}><div><strong>{row.candidateName || "未命名用户"}</strong><span>{row.targetRole || "未填写岗位"} · {planLabels[row.planId] || row.planId} · {formatDate(row.createdAt)}</span><em>{row.note || "顾客未填写备注"}{row.contact ? ` · 联系方式：${row.contact}` : ""}</em></div><button type="button" className="icon-button danger-button" aria-label="删除反馈" onClick={() => void removeRow(row.id)}><Trash2 size={16} /></button></article>)}
@@ -161,6 +191,10 @@ function filterRows(rows: UnlockInterest[], query: string) {
   const keyword = query.trim().toLowerCase();
   if (!keyword) return rows;
   return rows.filter((row) => `${row.candidateName} ${row.targetRole} ${row.contact} ${row.note} ${planLabels[row.planId] || row.planId}`.toLowerCase().includes(keyword));
+}
+
+function isAdminSessionError(error: unknown) {
+  return error instanceof Error && error.message.includes("管理员登录已失效");
 }
 
 function formatDate(value: string) {

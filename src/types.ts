@@ -101,4 +101,16 @@ export type AdminUsageStats = {
   optimizationRuns: number;
   creatorUsers: number;
   creatorRuns: number;
+  recentEvents: AdminUsageEvent[];
+};
+
+export type AdminUsageEvent = {
+  id: string;
+  createdAt: string;
+  eventType: "resume_optimize" | "creator_generate";
+  candidateName: string;
+  targetRole: string;
+  school: string;
+  major: string;
+  degree: string;
 };

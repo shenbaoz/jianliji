@@ -32,27 +32,28 @@ test("export feedback shows the owner's WeChat contact", async () => {
   assert.match(editor, /navigator\.clipboard\.writeText/);
 });
 
-test("every export click opens the price feedback gate", async () => {
+test("downloads are direct and never require price feedback", async () => {
   const editor = await read("src/components/EditorView.tsx");
-  assert.doesNotMatch(editor, /exportUnlocked/);
-  assert.match(editor, /const requestExport = \(action: \(\) => void\) => \{[\s\S]*?setGateAction/);
+  assert.match(editor, /onClick=\{handleDownloadPdf\}/);
+  assert.match(editor, /onClick=\{handleDownloadWord\}/);
+  assert.doesNotMatch(editor, /requestExport|gateAction|提交反馈并下载|暂不导出/);
 });
 
-test("result-page feedback unlocks later downloads without asking again", async () => {
+test("result-page feedback is optional and stays separate from downloads", async () => {
   const editor = await read("src/components/EditorView.tsx");
   assert.match(editor, /提交反馈/);
   assert.match(editor, /feedbackSubmitted/);
   assert.match(editor, /sessionStorage/);
-  assert.match(editor, /feedbackSubmitted \? handleDownloadPdf\(\) : requestExport\(handleDownloadPdf\)/);
-  assert.match(editor, /feedbackSubmitted \? handleDownloadWord\(\) : requestExport\(handleDownloadWord\)/);
   assert.match(editor, /提交反馈并关闭/);
+  assert.match(editor, /反馈不会影响下载/);
 });
 
 test("final resume is read-only with PDF as the primary export", async () => {
   const editor = await read("src/components/EditorView.tsx");
   assert.match(editor, /你的简历成稿已生成/);
   assert.match(editor, /下载 PDF/);
-  assert.doesNotMatch(editor, /可继续编辑|打印 \/ 保存 PDF|contentEditable/);
+  assert.doesNotMatch(editor, /可编辑版本|可继续编辑|打印 \/ 保存 PDF|contentEditable/);
+  assert.match(editor, /可预览并下载/);
   assert.match(editor, /className="editor-primary-export\b/);
   assert.doesNotMatch(editor, /已生成成稿|className=\{canPublish/);
 });
@@ -135,16 +136,26 @@ test("from-zero flow accepts an optional portrait and sends it into generated PD
   assert.match(pdfEditor, /portraitDataUrl/);
 });
 
-test("all export actions remain behind the price and feedback gate", async () => {
+test("optional price feedback keeps the exact three survey choices", async () => {
   const editor = await read("src/components/EditorView.tsx");
-  assert.match(editor, /feedbackSubmitted \? handleDownloadPdf\(\) : requestExport\(handleDownloadPdf\)/);
-  assert.match(editor, /feedbackSubmitted \? handleDownloadWord\(\) : requestExport\(handleDownloadWord\)/);
-  assert.match(editor, /提交反馈并下载/);
   assert.match(editor, /9\.9 元/);
   assert.match(editor, /19\.9 元/);
   assert.match(editor, /29\.9 元/);
   assert.doesNotMatch(editor, /不愿意付费|19\.9 元及以上|当前免费|免费下载/);
   assert.match(editor, /哪里让你觉得值，或不值/);
+});
+
+test("upload copy states the real retention window and does not promise one-time-only storage", async () => {
+  const home = await read("src/components/HomeView.tsx");
+  assert.match(home, /最长 24 小时后自动删除/);
+  assert.doesNotMatch(home, /文件仅用于本次整理/);
+  assert.doesNotMatch(home, /可编辑版本/);
+});
+
+test("uploaded resumes request line-preserving fast polish instead of whole-document reconstruction", async () => {
+  const source = await read("src/services/aiOptimize.ts");
+
+  assert.match(source, /fastPolish:\s*\(input\.sourceMode \|\| "resume"\) === "resume"/);
 });
 
 test("generated PDF keeps all source content while fitting one page", async () => {

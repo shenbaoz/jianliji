@@ -65,7 +65,7 @@ test("directly applies Reactive Resume JSON patches only when fastPolish is requ
           operations: [{
             op: "replace",
             path: "/lines/2",
-            value: "统筹校园活动执行，完成方案撰写、现场协同与复盘。"
+            value: "负责校园活动执行，并完成方案撰写与现场协同。"
           }]
         }]
       }) } }] }), { status: 200 });
@@ -73,7 +73,7 @@ test("directly applies Reactive Resume JSON patches only when fastPolish is requ
   });
 
   const result = await client.optimize({
-    resumeText: "教育背景\n新闻学本科\n负责校园活动执行",
+    resumeText: "教育背景\n新闻学本科\n负责校园活动方案撰写、现场协同与执行",
     targetRole: "内容运营",
     jobDescription: "负责活动策划",
     sourceMode: "resume",
@@ -82,10 +82,10 @@ test("directly applies Reactive Resume JSON patches only when fastPolish is requ
 
   assert.equal(requests.length, 1);
   assert.match(requests[0].messages[0].content, /只改写经历正文，不动结构/);
-  assert.equal(result.text, "教育背景\n新闻学本科\n统筹校园活动执行，完成方案撰写、现场协同与复盘。");
+  assert.equal(result.text, "教育背景\n新闻学本科\n负责校园活动执行，并完成方案撰写与现场协同。");
   assert.deepEqual(result.changes, [{
-    before: "负责校园活动执行",
-    after: "统筹校园活动执行，完成方案撰写、现场协同与复盘。"
+    before: "负责校园活动方案撰写、现场协同与执行",
+    after: "负责校园活动执行，并完成方案撰写与现场协同。"
   }]);
   assert.deepEqual(result.suggestions, []);
 });
@@ -230,6 +230,18 @@ test("flags metrics and tools that appear only in the AI draft", () => {
   assert.equal(flags.some((flag) => flag.includes("Excel")), false);
 });
 
+test("flags invented methods, artifacts and outcomes even when they contain no new number or tool", () => {
+  const flags = findUnverifiedClaims(
+    "追踪并解决疑难 Bug，负责线上问题定位。",
+    "搭建多维监控指标与告警机制，形成可复用的问题排查手册，显著降低线上问题率。",
+    []
+  );
+
+  assert.ok(flags.some((flag) => flag.includes("告警机制")));
+  assert.ok(flags.some((flag) => flag.includes("问题排查手册")));
+  assert.ok(flags.some((flag) => flag.includes("显著降低")));
+});
+
 test("accepts a multiplier rewritten from x notation to Chinese", () => {
   const flags = findUnverifiedClaims(
     "Built an IndexedDB cache capable of making page load over 15x faster.",
@@ -238,6 +250,59 @@ test("accepts a multiplier rewritten from x notation to Chinese", () => {
   );
 
   assert.equal(flags.some((flag) => flag.includes("15")), false);
+});
+
+test("accepts Chinese ten-thousands rewritten with Arabic digits without deleting the value", () => {
+  const flags = findUnverifiedClaims("掘金个人博客访问量六十万+", "掘金个人博客访问量 60 万+", []);
+
+  assert.equal(flags.some((flag) => flag.includes("60")), false);
+});
+
+test("fast polish accepts a small safe patch on a long resume without falling back to whole-document rewriting", async () => {
+  const requests = [];
+  const sourceLines = ["工作经历", "负责需求整理、项目跟进与问题处理", ...Array.from({ length: 90 }, (_, index) => `项目记录 ${index + 1}`), "教育经历", "某大学 本科", "专业技能", "Java"];
+  const client = createDeepSeekClient({
+    apiKey: "test-key",
+    fetchImpl: async (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+        proposals: [{ title: "整理职责表达", operations: [{ op: "replace", path: "/lines/1", value: "负责项目跟进与问题处理，并完成需求整理。" }] }]
+      }) } }] }), { status: 200 });
+    }
+  });
+
+  const result = await client.optimize({ resumeText: sourceLines.join("\n"), targetRole: "项目经理", sourceMode: "resume", fastPolish: true });
+
+  assert.equal(requests.length, 1);
+  assert.equal(result.quality.verdict, "ready");
+  assert.match(result.text, /负责项目跟进与问题处理，并完成需求整理/);
+  assert.equal(result.text.split(/\n/).length, sourceLines.length);
+});
+
+test("fast polish still produces an evidence-first improvement when no AI patch is safe", async () => {
+  const requests = [];
+  const source = "工作经历\n负责需求整理与项目跟进\n教育经历\n某大学 本科";
+  const client = createDeepSeekClient({
+    apiKey: "test-key",
+    fetchImpl: async (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+        proposals: [{ title: "不安全改写", operations: [{ op: "replace", path: "/lines/1", value: "主导 999 人团队并建立项目机制。" }] }]
+      }) } }] }), { status: 200 });
+    }
+  });
+
+  const result = await client.optimize({ resumeText: source, targetRole: "项目经理", sourceMode: "resume", fastPolish: true });
+
+  assert.equal(requests.length, 1);
+  assert.equal(result.safe, true);
+  assert.notEqual(result.text, source);
+  assert.match(result.text, /^核心优势\n- 需求整理与项目跟进/m);
+  for (const line of source.split("\n")) assert.match(result.text, new RegExp(line));
+  assert.equal((result.text.match(/负责/g) || []).length, (source.match(/负责/g) || []).length);
+  assert.doesNotMatch(result.text, /999|主导|项目机制/);
+  assert.deepEqual(result.changes, []);
+  assert.ok(result.highlights.some((item) => item.includes("核心优势")));
 });
 
 test("sanitizes unsupported ability upgrades and generic placeholders without deleting supported advantages", () => {

@@ -27,16 +27,18 @@ test("multi-stage prompts reconstruct novice resumes without inventing employmen
   assert.doesNotMatch(rewrite, /沈保自|杜小艳/);
 });
 
-test("existing-resume prompts require visible substantive rewrites instead of spacing or synonym polish", () => {
+test("existing-resume prompts require evidence-bound rewrites without changing responsibility ownership", () => {
   const resumeInput = { ...input, sourceMode: "resume" };
   const rewrite = buildRewriteMessages(resumeInput, {}).map((item) => item.content).join("\n");
   const qa = buildQaMessages(resumeInput, {}, "正文").map((item) => item.content).join("\n");
 
-  assert.match(rewrite, /动作、方法、结果/);
+  assert.match(rewrite, /负责.*参与.*协助.*原样保留/);
+  assert.match(rewrite, /没有.*方法.*结果.*不得新增/);
   assert.match(rewrite, /禁止只修改空格、标点、数字间距或替换少量近义词/);
   assert.match(rewrite, /整句重写/);
   assert.match(qa, /肉眼可见的实质改写/);
   assert.match(qa, /suggestions.*必须为空数组/);
+  assert.doesNotMatch(rewrite, /避免"负责""参与""协助"/);
 });
 
 test("existing-resume strategy outputs content prioritization instead of preserving every section verbatim", () => {

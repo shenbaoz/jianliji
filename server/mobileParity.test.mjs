@@ -7,7 +7,9 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 test("mobile views reuse refinement and final export handlers", async () => {
   const [app, editor] = await Promise.all([read("src/App.tsx"), read("src/components/EditorView.tsx")]);
   assert.match(app, /onGenerate=\{refine\}/);
-  assert.match(editor, /feedbackSubmitted \? handleDownloadPdf\(\) : requestExport\(handleDownloadPdf\)/);
+  assert.match(editor, /onClick=\{handleDownloadPdf\}/);
+  assert.match(editor, /onClick=\{handleDownloadWord\}/);
+  assert.doesNotMatch(editor, /requestExport|gateAction/);
   assert.doesNotMatch(editor, /onClick=\{handleSave\}/);
 });
 

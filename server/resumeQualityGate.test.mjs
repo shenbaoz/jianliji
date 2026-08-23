@@ -77,6 +77,15 @@ test("quality gate rejects an existing resume when AI returns the original wordi
   assert.ok(result.checks.some((item) => /未产生实际文字改写/.test(item)));
 });
 
+test("quality gate requires source section groups to remain standalone headings", () => {
+  const source = "教育经历\n某大学 本科\n工作经历\n某公司 Android 开发工程师\n负责客户端开发\n项目经历\n开源阅读应用\n专业技能\nJava、Kotlin";
+  const draft = "教育经历 某大学 本科\n工作经历 某公司 Android 开发工程师，完成客户端开发\n项目经历 开源阅读应用并持续维护\n专业技能 Java、Kotlin";
+  const result = evaluateResumeQuality({ sourceText: source, targetRole: "Android 开发工程师", draft, sourceMode: "resume", qa: { verdict: "ready", score: 92 } });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.checks.some((item) => /AI 删除了原简历的章节/.test(item)));
+});
+
 test("quality gate rejects an existing resume that only swaps a few near-synonyms", () => {
   const source = "教育背景\n新闻学本科，学习新闻采访与写作。\n实习经历\n负责公众号内容选题、撰写、排版和复盘，参与校园活动执行，维护用户社群并整理反馈。\n项目经历\n参与品牌推广，完成活动物料整理、现场协调和数据记录。\n校园经历\n联系校外品牌方，协调校内资源，参与地推、晚会赞助和活动复盘。\n技能\n使用剪映、秀米和Office完成内容制作与日常协作。";
   const draft = "教育背景\n新闻学本科，系统学习新闻采访与写作。\n实习经历\n负责公众号内容选题、撰写、排版与复盘，参与校园活动执行，维护用户社群并整理反馈。\n项目经历\n参与品牌推广，完成活动物料整理、现场协同和数据记录。\n校园经历\n联系校外品牌方，协调校内资源，参与地推、晚会赞助和活动复盘。\n技能\n使用剪映、秀米和Office完成内容制作与日常协作。";

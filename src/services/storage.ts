@@ -1,5 +1,5 @@
 import { getApiBase } from "./apiBase";
-import type { AdminUsageStats, SavedResumeVersion, UnlockInterest } from "../types";
+import type { AdminUsageStats, UnlockInterest } from "../types";
 
 const visitorKey = "resume-job-fit-visitor-id";
 const visitorPattern = /^[a-zA-Z0-9_-]{16,80}$/;
@@ -22,53 +22,6 @@ export function getVisitorHeaders() {
   return { "X-Visitor-Id": getVisitorId() };
 }
 
-export type StorageHealth = {
-  online: boolean;
-  mode: "mysql" | "file" | "local" | "unknown";
-  label: string;
-  persistent: boolean;
-};
-
-export async function getStorageHealth(): Promise<StorageHealth> {
-  try {
-    const response = await fetch(`${apiBase}/api/health`);
-    if (!response.ok) throw new Error("Health check failed");
-    const payload = (await response.json()) as {
-      ok?: boolean;
-      storage?: { mode?: string; label?: string; persistent?: boolean };
-    };
-    return {
-      online: Boolean(payload.ok),
-      mode: payload.storage?.mode === "mysql" || payload.storage?.mode === "file" ? payload.storage.mode : "unknown",
-      label: payload.storage?.label || "服务器存储",
-      persistent: Boolean(payload.storage?.persistent)
-    };
-  } catch {
-    return {
-      online: false,
-      mode: "local",
-      label: "本机浏览器缓存",
-      persistent: false
-    };
-  }
-}
-
-export async function loadAdminVersions(): Promise<SavedResumeVersion[]> {
-  const response = await fetch(`${apiBase}/api/admin/versions`, { credentials: "include" });
-  if (response.status === 401) throw new Error("管理员登录已失效，请重新登录。");
-  if (!response.ok) throw new Error("读取全站简历版本失败，请稍后重试。");
-  return (await response.json()) as SavedResumeVersion[];
-}
-
-export async function deleteAdminVersion(id: string) {
-  const response = await fetch(`${apiBase}/api/admin/versions/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    credentials: "include"
-  });
-  if (response.status === 401) throw new Error("管理员登录已失效，请重新登录。");
-  if (!response.ok) throw new Error("删除简历版本失败，请稍后重试。");
-}
-
 export async function loadUnlockInterest(): Promise<UnlockInterest[]> {
   const response = await fetch(`${apiBase}/api/interest`, { credentials: "include" });
   if (response.status === 401) throw new Error("管理员登录已失效，请重新登录。");
@@ -81,15 +34,6 @@ export async function loadAdminUsageStats(): Promise<AdminUsageStats> {
   if (response.status === 401) throw new Error("管理员登录已失效，请重新登录。");
   if (!response.ok) throw new Error("读取使用统计失败，请稍后重试。");
   return (await response.json()) as AdminUsageStats;
-}
-
-export async function recordUsageEvent(eventType: "resume_optimize" | "creator_generate") {
-  const response = await fetch(`${apiBase}/api/usage-events`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...getVisitorHeaders() },
-    body: JSON.stringify({ eventType })
-  });
-  if (!response.ok) throw new Error("使用统计暂时不可用。");
 }
 
 export async function deleteUnlockInterest(id: string) {

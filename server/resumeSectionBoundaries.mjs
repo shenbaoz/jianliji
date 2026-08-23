@@ -80,6 +80,7 @@ const SECTION_HEADING_PATTERN = "核心优势|个人优势|教育背景|教育�
 
 export function normalizeSectionHeadingLines(text) {
   return String(text || "")
+    .replace(/从\s*到\s*1(?=[\u4e00-\u9fffA-Za-z])/g, "从0到1")
     .split(/\r?\n/)
     .flatMap((line) => {
       let current = line.trim();
@@ -88,10 +89,20 @@ export function normalizeSectionHeadingLines(text) {
         const spacedHeading = new RegExp(heading.split("").map((character) => character.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s*"), "g");
         current = current.replace(spacedHeading, heading);
       }
+      const inlineHeading = new RegExp(`(^|\\s+)(${SECTION_HEADING_PATTERN})(?=\\s|[:：]|$)`, "g");
+      const splitInline = current
+        .replace(inlineHeading, (_match, prefix, heading) => `${prefix ? "\n" : ""}${heading}\n`)
+        .replace(/\n[ \t]*[:：][ \t]*/g, "\n")
+        .split(/\n+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (splitInline.length > 1) return splitInline;
+      current = splitInline[0] || current;
       const headingAtEnd = new RegExp(`^(.+?)\\s+(${SECTION_HEADING_PATTERN})\\s*[:：]?\\s*$`);
       const headingBeforeList = new RegExp(`^(.+?)\\s+(${SECTION_HEADING_PATTERN})\\s*[:：]?\\s+([-•*·▪●]|\\d+[.)、])`);
       const headingBeforeEntry = new RegExp(`^(.+?)\\s+(${SECTION_HEADING_PATTERN})\\s*(?:[:：]\\s*)?(.+)$`);
       const headingAtStart = new RegExp(`^(${SECTION_HEADING_PATTERN})\\s*[:：]?\\s+([-•*·▪●]|\\d+[.)、])\\s*(.*)$`);
+      const headingAtStartWithText = new RegExp(`^(${SECTION_HEADING_PATTERN})(?:\\s*[:：]\\s*|\\s+)(.+)$`);
       const endMatch = current.match(headingAtEnd);
       if (endMatch) return [endMatch[1].trim(), endMatch[2]];
       const beforeListMatch = current.match(headingBeforeList);
@@ -102,6 +113,8 @@ export function normalizeSectionHeadingLines(text) {
       }
       const startMatch = current.match(headingAtStart);
       if (startMatch) return [startMatch[1], `${startMatch[2]} ${startMatch[3]}`.trim()];
+      const startWithTextMatch = current.match(headingAtStartWithText);
+      if (startWithTextMatch) return [startWithTextMatch[1], startWithTextMatch[2].trim()];
       return [current];
     })
     .join("\n")

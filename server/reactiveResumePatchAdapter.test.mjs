@@ -8,7 +8,7 @@ import {
 
 test("uses Reactive Resume's improvement framework and RFC 6902 proposal contract", () => {
   const messages = buildReactiveResumeImproveMessages({
-    resumeText: "教育背景\n新闻学本科\n负责校园活动执行",
+    resumeText: "教育背景\n新闻学本科\n负责校园活动方案撰写、现场协同与复盘执行",
     targetRole: "内容运营",
     jobDescription: "负责内容策划"
   });
@@ -29,20 +29,20 @@ test("normalizes and directly applies Reactive Resume patch proposals", () => {
       operations: [{
         op: "replace",
         path: "/lines/2",
-        value: "统筹校园活动执行，完成方案撰写、现场协同与复盘。"
+        value: "负责校园活动全流程执行，涵盖方案撰写、现场协同与复盘。"
       }]
     }]
   });
   const result = applyReactiveResumeProposals(
-    { lines: ["教育背景", "新闻学本科", "负责校园活动执行"] },
+    { lines: ["教育背景", "新闻学本科", "负责校园活动方案撰写、现场协同与复盘执行"] },
     proposals
   );
 
   assert.equal(proposals[0].id, "proposal-1");
-  assert.equal(result.lines[2], "统筹校园活动执行，完成方案撰写、现场协同与复盘。");
+  assert.equal(result.lines[2], "负责校园活动全流程执行，涵盖方案撰写、现场协同与复盘。");
   assert.deepEqual(result.changes, [{
-    before: "负责校园活动执行",
-    after: "统筹校园活动执行，完成方案撰写、现场协同与复盘。"
+    before: "负责校园活动方案撰写、现场协同与复盘执行",
+    after: "负责校园活动全流程执行，涵盖方案撰写、现场协同与复盘。"
   }]);
 });
 
@@ -69,19 +69,51 @@ test("drops unsupported ownership upgrades while keeping safe improvements", () 
       title: "经历强化",
       operations: [
         { op: "replace", path: "/lines/1", value: "主导校园活动全流程。" },
-        { op: "replace", path: "/lines/2", value: "协调校园活动执行，完成方案撰写与现场协同。" }
+        { op: "replace", path: "/lines/2", value: "负责校园活动执行，并完成方案撰写与现场协同。" }
       ]
     }]
   });
 
   const result = applyReactiveResumeProposals(
-    { lines: ["经历", "参与校园活动", "负责校园活动执行"] },
+    { lines: ["经历", "参与校园活动", "负责校园活动方案撰写、现场协同与执行"] },
     proposals
   );
 
   assert.equal(result.lines[1], "参与校园活动");
-  assert.equal(result.lines[2], "协调校园活动执行，完成方案撰写与现场协同。");
+  assert.equal(result.lines[2], "负责校园活动执行，并完成方案撰写与现场协同。");
   assert.equal(result.changes.length, 1);
+});
+
+test("preserves each source responsibility verb instead of swapping or removing it", () => {
+  const proposals = normalizeResumePatchProposals({
+    proposals: [{
+      title: "错误责任变化",
+      operations: [
+        { op: "replace", path: "/lines/1", value: "参与项目需求整理并推动上线。" },
+        { op: "replace", path: "/lines/2", value: "协调活动现场与资料整理。" },
+        { op: "replace", path: "/lines/3", value: "负责完成用户访谈记录。" }
+      ]
+    }]
+  });
+
+  const result = applyReactiveResumeProposals(
+    { lines: ["经历", "负责项目需求整理", "参与活动执行", "协助用户访谈"] },
+    proposals
+  );
+
+  assert.deepEqual(result.lines, ["经历", "负责项目需求整理", "参与活动执行", "协助用户访谈"]);
+  assert.deepEqual(result.changes, []);
+});
+
+test("fast-polish prompt forbids invented methods and preserves responsibility wording", () => {
+  const prompt = buildReactiveResumeImproveMessages({ resumeText: "工作经历\n负责问题定位", targetRole: "Android 开发" })
+    .map((message) => message.content)
+    .join("\n");
+
+  assert.match(prompt, /负责.*参与.*协助.*原样保留/);
+  assert.match(prompt, /没有.*方法.*结果.*不得新增/);
+  assert.doesNotMatch(prompt, /避免"负责""参与""协助"/);
+  assert.doesNotMatch(prompt, /没有数字的，用"xx 项"/);
 });
 
 test("does not count whitespace cleanup as a substantive resume optimization", () => {

@@ -86,7 +86,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
     <PageShell
       active="workspace"
       title="上传你的简历"
-      description="我们会识别现有内容，整理结构，并生成可编辑版本。"
+      description="我们会识别现有内容，整理结构，并生成可预览并下载的投递版本。"
       actions={
         <div className="flex gap-2">
           {resumeLength > 0 && (
@@ -107,7 +107,7 @@ export const HomeView = memo(function HomeView({ input, onChange, onRefine, isRe
           <header className="workspace-pane-header">
             <div>
               <h2>上传简历</h2>
-              <p>{resumeLength} 字 · 文件仅用于本次整理</p>
+              <p>{resumeLength} 字 · 文件最长 24 小时后自动删除</p>
             </div>
           </header>
           <div className="workspace-pane-body upload-stage">

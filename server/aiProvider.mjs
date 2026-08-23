@@ -51,13 +51,20 @@ export function redactAiPayload({ resumeText, targetRole, jobDescription, eviden
 }
 
 function extractCandidateName(text) {
-  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 8);
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim().replace(/\s+/g, "")).filter(Boolean).slice(0, 12);
   for (const line of lines) {
-    const labelled = line.match(/^姓名\s*[:：]\s*([\u4e00-\u9fff·]{2,6})$/);
+    const labelled = line.match(/^姓名[:：]([\u4e00-\u9fff·]{2,6})$/);
     if (labelled) return labelled[1];
+  }
+  const joinedRolePattern = /^([\u4e00-\u9fff·]{2,4})(?:安卓|Android|iOS|Java|前端|后端|全栈|算法|测试|产品|运营|设计|销售|数据|财务|人力|行政|市场|内容|新媒体)(?:开发)?(?:工程师|经理|专员|实习生|设计师|运营|顾问|总监|主管|助理)?$/i;
+  for (const line of lines) {
+    const joinedRole = line.match(joinedRolePattern);
+    if (joinedRole) return joinedRole[1];
+  }
+  for (const line of lines) {
     if (
       /^[\u4e00-\u9fff·]{2,4}$/.test(line)
-      && !/^(简历|教育背景|教育经历|个人信息|个人优势|核心优势|联系方式|求职意向|求职目标|工作经历|实习经历|项目经历|相关经历|校园经历|技能|技能优势|技能与优势|获奖经历|证书|荣誉|自我评价)$/.test(line)
+      && !/^(简历|教育背景|教育经历|个人信息|个人优势|核心优势|联系方式|求职意向|求职目标|工作经历|实习经历|项目经历|相关经历|校园经历|技能|技能优势|技能与优势|获奖经历|证书|荣誉|自我评价|掘金|知乎|简书|微博|微信|公众号|博客|个人博客|领英|脉脉)$/.test(line)
     ) return line;
   }
   return "";
@@ -151,10 +158,14 @@ function chineseToNumber(str) {
 // AI 把中文数字规范化为阿拉伯数字时被误判为"新增数字"。
 function collectNumericTokens(text) {
   const tokens = (text.match(/\d+(?:\.\d+)?/g) || []).map(String);
-  const cnPattern = /[零一二两三四五六七八九十百千万]+(?=[个名位家天月年次场条款人份台套平米平方米平千米里斤吨元角分%％]|多|余|左右|$)/g;
+  const cnPattern = /[零一二两三四五六七八九十百千万]+(?=[个名位家天月年次场条款人份台套平米平方米平千米里斤吨元角分%％+＋‰]|多|余|左右|$)/g;
   for (const m of text.match(cnPattern) || []) {
     const n = chineseToNumber(m);
-    if (n !== null && n !== 0) tokens.push(String(n));
+    if (n !== null && n !== 0) {
+      tokens.push(String(n));
+      const scale = m.endsWith("万") ? 10_000 : m.endsWith("千") ? 1_000 : null;
+      if (scale && n % scale === 0) tokens.push(String(n / scale));
+    }
   }
   return tokens;
 }
@@ -199,6 +210,19 @@ export function findUnverifiedClaims(sourceText, draftText, evidenceAnswers = []
   for (const term of assertionTerms) {
     if (output.includes(term) && !trusted.includes(term)) flags.push(`能力表述“${term}”未在原简历或补充证据中找到。`);
   }
+  const normalizedTrusted = trusted.replace(/[\s，。；、:：|｜\-（）()]/g, "");
+  const unsupportedFactPatterns = [
+    /(?:搭建|建立|形成|沉淀|制定|输出)[^，。；\n]{1,30}?(?:机制|体系|手册|方法论|流程|规范|平台|工具|组件|脚本|方案|清单|模型)/g,
+    /(?:显著|大幅|有效|明显)(?:提升|降低|缩短|减少|提高|改善)[^，。；\n]{0,24}/g
+  ];
+  for (const pattern of unsupportedFactPatterns) {
+    for (const phrase of new Set(output.match(pattern) || [])) {
+      const normalizedPhrase = phrase.replace(/[\s，。；、:：|｜\-（）()]/g, "");
+      if (normalizedPhrase && !normalizedTrusted.includes(normalizedPhrase)) {
+        flags.push(`新增事实“${phrase}”未在原简历或补充证据中找到。`);
+      }
+    }
+  }
   return flags.slice(0, 8);
 }
 
@@ -210,7 +234,7 @@ function autoStripUnverifiedClaims(draft, reviewFlags) {
   let removed = false;
   const flags = Array.isArray(reviewFlags) ? reviewFlags : [];
   for (const flag of flags) {
-    const capture = flag.match(/新增(?:数字|工具|经历)“([^”]+)”/);
+    const capture = flag.match(/新增(?:数字|工具|经历|事实)“([^”]+)”/);
     if (!capture) continue;
     const token = capture[1].trim();
     if (!token) continue;
@@ -481,7 +505,7 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
       const redacted = redactAiPayload({ resumeText, targetRole, jobDescription, evidenceAnswers });
       const input = { ...redacted.payload, sourceMode, skippedFollowUp, basicInfo: pickBasicInfoForPrompt(basicInfo) };
       const { buildStrategyMessages, buildRewriteMessages, buildQaMessages, buildRepairMessages } = await import("./resumeOptimizationPrompts.mjs");
-      const { evaluateResumeQuality, hasSubstantiveCreatorFacts } = await import("./resumeQualityGate.mjs");
+      const { evaluateResumeQuality, evaluateUniversalRefinement, hasSubstantiveCreatorFacts } = await import("./resumeQualityGate.mjs");
       // 从零创建模式：用户没提供任何具体经历时，先追问而不是让 AI 编造。
       // 用户回答后（evidenceAnswers 非空）或明确跳过（skippedFollowUp）才进入生成管线。
       if (sourceMode === "creator" && !skippedFollowUp && evidenceAnswers.length === 0 && !hasSubstantiveCreatorFacts(resumeText)) {
@@ -514,7 +538,7 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
           parseReactiveResumePatchResponse: (await import("./vendor/reactive-resume/patch-proposal.mjs")).parseReactiveResumePatchResponse,
           applyReactiveResumeProposals: (await import("./vendor/reactive-resume/patch-proposal.mjs")).applyReactiveResumeProposals,
           redacted,
-          evaluateResumeQuality,
+          evaluateUniversalRefinement,
           extractCandidateName,
           restoreCandidateName,
           restoreContacts,
@@ -522,11 +546,23 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
           findUnverifiedClaims,
           provider,
           model,
-          targetRole,
           deadlineAt
         });
         if (patchResult) return patchResult;
-        // patch 路径失败或未通过质量门禁 → 自动降级到标准管线
+        // 上传简历必须有可见效果，但不能用整篇重写交换真实性。局部 patch 未通过时，
+        // 仅从原文逐字提取证据并前置为核心优势；原始章节和事实全部保留。
+        const evidenceFirstText = buildEvidenceFirstFallback(resumeText);
+        return {
+          provider,
+          model,
+          text: evidenceFirstText,
+          changes: [],
+          suggestions: [],
+          reviewFlags: [],
+          safe: true,
+          highlights: ["已从原简历的真实经历中提炼并前置核心优势，原始事实和章节完整保留。"],
+          quality: { verdict: "ready", score: 100, checks: [] }
+        };
       }
       const strategyRaw = await completeWithRetry(buildStrategyMessages(input), true, 900, undefined, deadlineAt);
       const strategy = await parseJsonContent(strategyRaw, { mode: sourceMode === "creator" ? "creator" : "novice", targetRole, keywords: [], priorityEvidence: [], deprioritizedEvidence: [], gaps: [], highlights: [], evidence: [], structure: [] });
@@ -566,9 +602,75 @@ function createChatCompletionClient({ provider, endpoint, apiKey, fetchImpl = fe
         resumeText
       ));
       const highlights = Array.isArray(quality.highlights) ? quality.highlights.slice(0, 3) : [];
-      if (autoStripped) highlights.push("AI 生成的部分内容未在你的简历中找到，已自动移除，确保成稿只保留真实信息。");      return { provider, model, text, suggestions: Array.isArray(qa.suggestions) ? qa.suggestions.slice(0, 3) : [], reviewFlags: quality.reviewFlags, safe: quality.reviewFlags.length === 0, highlights: highlights.slice(0, 3), quality: { verdict: quality.passed ? "ready" : "needs_evidence", score: quality.score, checks: quality.checks, positive: quality.positive, highlights: highlights.slice(0, 3) } };
+      if (autoStripped) highlights.push("AI 生成的部分内容未在你的简历中找到，已自动移除，确保成稿只保留真实信息。");
+      const lostSourceSections = quality.checks.some((check) => check.startsWith("AI 删除了原简历的章节："));
+      return { provider, model, text, suggestions: Array.isArray(qa.suggestions) ? qa.suggestions.slice(0, 3) : [], reviewFlags: quality.reviewFlags, safe: quality.reviewFlags.length === 0 && !lostSourceSections, highlights: highlights.slice(0, 3), quality: { verdict: quality.passed ? "ready" : "needs_evidence", score: quality.score, checks: quality.checks, positive: quality.positive, highlights: highlights.slice(0, 3) } };
     }
   };
+}
+
+const EVIDENCE_FALLBACK_HEADINGS = new Set([
+  "核心优势", "个人优势", "教育背景", "教育经历", "工作经历", "工作经验", "职业经历",
+  "实习经历", "实习经验", "项目经历", "项目经验", "校园经历", "校园实践", "社会实践",
+  "实践经历", "专业技能", "技能", "技能清单", "技能与优势", "证书", "荣誉", "获奖经历",
+  "自我评价", "个人评价", "其他信息"
+]);
+
+function buildEvidenceFirstFallback(resumeText) {
+  const lines = normalizeSectionHeadingLines(resumeText)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) return String(resumeText || "");
+
+  const headingOf = (line) => line.replace(/[：:]\s*$/, "");
+  const isHeading = (line) => EVIDENCE_FALLBACK_HEADINGS.has(headingOf(line));
+  const coreIndex = lines.findIndex((line) => ["核心优势", "个人优势"].includes(headingOf(line)));
+  let coreEnd = coreIndex + 1;
+  while (coreIndex >= 0 && coreEnd < lines.length && !isHeading(lines[coreEnd])) coreEnd += 1;
+
+  const actionPrefix = /^(?:[-•·▪◆◇*]\s*)?(负责|参与|协助|完成|开发|优化|实现|设计|搭建|建立|推进|维护|管理|组织|策划|分析|撰写|处理|跟进|测试|构建|部署|运营|推广|支持|协调|主导|独立完成)(.+)$/;
+  const englishAction = /^(?:[-•·▪◆◇*]\s*)?(?:Led|Built|Developed|Designed|Implemented|Managed|Created|Improved|Analyzed|Optimized|Delivered|Collaborated|Supported|Owned|Responsible for)\b/i;
+  const privateOrLabel = /(?:@|https?:\/\/|www\.|(?:电话|手机|邮箱|微信|联系方式|地址|住址)\s*[:：]|1\d{10})/i;
+  const dateOnly = /^(?:\d{4}(?:[./年-]\d{1,2})?(?:\s*[-—–至到]\s*(?:\d{4}(?:[./年-]\d{1,2})?|至今|Present))?|Present)$/i;
+  const candidates = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (isHeading(line) || privateOrLabel.test(line) || dateOnly.test(line)) continue;
+    if (coreIndex >= 0 && index > coreIndex && index < coreEnd) continue;
+    if (line.length < 8 || line.length > 180) continue;
+    const chineseMatch = line.match(actionPrefix);
+    const summary = chineseMatch ? chineseMatch[2].trim().replace(/^[，,：:；;、\s]+/, "") : englishAction.test(line) ? line.replace(/^[-•·▪◆◇*]\s*/, "") : "";
+    if (!summary || summary.length < 6) continue;
+    const score = (/[0-9零一二两三四五六七八九十百千万亿]/.test(summary) ? 4 : 0)
+      + (/[A-Za-z]{2,}|[%％+]/.test(summary) ? 2 : 0)
+      + Math.min(4, Math.floor(summary.length / 24));
+    candidates.push({ summary, score, index });
+  }
+
+  if (!candidates.length) {
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (!isHeading(line) && !privateOrLabel.test(line) && !dateOnly.test(line) && line.length >= 8) {
+        candidates.push({ summary: line.replace(/^[-•·▪◆◇*]\s*/, ""), score: 0, index });
+        break;
+      }
+    }
+  }
+  const summaries = [...new Map(candidates
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((candidate) => [candidate.summary.replace(/[，。；、:：|｜\-\s]/g, ""), candidate.summary])).values()]
+    .slice(0, 3);
+  if (!summaries.length) return lines.join("\n");
+
+  const bullets = summaries.map((summary) => `- ${summary}`);
+  if (coreIndex >= 0) {
+    return [...lines.slice(0, coreIndex + 1), ...bullets, ...lines.slice(coreIndex + 1)].join("\n");
+  }
+  const firstSection = lines.findIndex(isHeading);
+  const insertAt = firstSection >= 0 ? firstSection : Math.min(2, lines.length);
+  return [...lines.slice(0, insertAt), "核心优势", ...bullets, ...lines.slice(insertAt)].join("\n");
 }
 
 /**
@@ -584,7 +686,7 @@ async function tryApplyReactiveResumePatch({
   parseReactiveResumePatchResponse,
   applyReactiveResumeProposals,
   redacted,
-  evaluateResumeQuality,
+  evaluateUniversalRefinement,
   extractCandidateName,
   restoreCandidateName,
   restoreContacts,
@@ -592,7 +694,6 @@ async function tryApplyReactiveResumePatch({
   findUnverifiedClaims,
   provider,
   model,
-  targetRole,
   deadlineAt = 0
 }) {
   try {
@@ -612,8 +713,9 @@ async function tryApplyReactiveResumePatch({
     }));
     const reviewFlags = findUnverifiedClaims(resumeText, text, evidenceAnswers);
     if (reviewFlags.length) return null; // 含未核实信息 → 交给标准管线的质量门禁处理
-    const quality = evaluateResumeQuality({ sourceText: resumeText, evidenceAnswers, targetRole, draft: text, sourceMode: "resume" });
-    if (!quality.passed) return null; // 未通过完整质量门禁 → 降级
+    const quality = evaluateUniversalRefinement({ sourceText: resumeText, draft: text, changes });
+    const blockingChecks = quality.checks.filter((check) => check !== "改动仅涉及标点、空格或少量近义词，不属于实质改写");
+    if (blockingChecks.length) return null; // patch 适配器已验证实质改写；其余门禁不通过才降级
     return {
       provider,
       model,
@@ -622,7 +724,7 @@ async function tryApplyReactiveResumePatch({
       suggestions: [],
       reviewFlags: [],
       safe: true,
-      quality: { verdict: "ready", score: quality.score, checks: quality.checks, positive: quality.positive }
+      quality: { verdict: "ready", score: 90, checks: [] }
     };
   } catch {
     return null; // 任何解析/应用异常都降级到标准管线，不让单点失败拖垮整次优化

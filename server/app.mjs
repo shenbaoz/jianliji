@@ -19,7 +19,7 @@ const defaultUploadDir = resolve("data", "uploads");
 export function createApp(versionStore, interestStore = null, storageStatus = null, creatorStore = null, aiClient = null, options = {}) {
   const app = express();
   const adminSessions = new Map();
-  const adminSessionTtlMs = 10 * 365 * 24 * 60 * 60 * 1000;
+  const adminSessionTtlMs = 8 * 60 * 60 * 1000;
   const healthCheck = typeof options.healthCheck === "function" ? options.healthCheck : null;
   const usageStore = options.usageStore || null;
   const uploadDir = options.uploadDir || defaultUploadDir;
@@ -165,7 +165,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       }
       const result = isUniversal && typeof aiClient.optimizeUniversal === "function"
         ? await aiClient.optimizeUniversal({ resumeText })
-        : await aiClient.optimize({ resumeText, targetRole: normalizedTargetRole, jobDescription, evidenceAnswers: safeEvidenceAnswers, sourceMode: isUniversal ? "universal" : (sourceMode === "creator" ? "creator" : "resume"), skippedFollowUp: req.body?.skippedFollowUp === true, basicInfo: { name: normalizedBasicInfo.name, school: normalizedBasicInfo.school, major: normalizedBasicInfo.major, degree: normalizedBasicInfo.degree } });
+        : await aiClient.optimize({ resumeText, targetRole: normalizedTargetRole, jobDescription, evidenceAnswers: safeEvidenceAnswers, sourceMode: isUniversal ? "universal" : (sourceMode === "creator" ? "creator" : "resume"), skippedFollowUp: req.body?.skippedFollowUp === true, fastPolish: req.body?.fastPolish === true, basicInfo: { name: normalizedBasicInfo.name, school: normalizedBasicInfo.school, major: normalizedBasicInfo.major, degree: normalizedBasicInfo.degree } });
       const text = typeof result?.text === "string"
         ? result.text
           .replace(/\{\{(?:PHONE|EMAIL)_\d+\}\}/g, "")
@@ -174,14 +174,16 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
           .join("\n")
           .trim()
         : result?.text;
-      if (usageStore) {
-        const visitorId = getOptionalVisitorId(req);
-        if (visitorId) {
-          await usageStore.record({
-            visitorId,
-            eventType: sourceMode === "creator" ? "creator_generate" : "resume_optimize"
-          });
-        }
+      if (usageStore && result?.safe !== false && typeof text === "string" && text.trim()) {
+        await usageStore.record({
+          visitorId: getUsageVisitorId(req),
+          eventType: sourceMode === "creator" ? "creator_generate" : "resume_optimize",
+          candidateName: normalizedBasicInfo.name,
+          targetRole: normalizedTargetRole,
+          school: normalizedBasicInfo.school,
+          major: normalizedBasicInfo.major,
+          degree: normalizedBasicInfo.degree
+        });
       }
       res.json({ ...result, text: normalizeSectionHeadingLines(mergeBasicInfo(text, normalizedBasicInfo)) });
     } catch (error) {
@@ -233,7 +235,7 @@ export function createApp(versionStore, interestStore = null, storageStatus = nu
       res.status(401).json({ error: "密码不正确。" });
       return;
     }
-    const token = createPersistentAdminToken();
+    const token = randomUUID();
     adminSessions.set(token, Date.now() + adminSessionTtlMs);
     res.cookie("resume_admin_session", token, {
       httpOnly: true,
@@ -642,24 +644,7 @@ function isAdmin(req, sessions) {
     if (Date.now() <= sessions.get(token)) return true;
     sessions.delete(token);
   }
-  return verifyPersistentAdminToken(token);
-}
-
-function createPersistentAdminToken() {
-  const payload = "permanent";
-  return `${payload}.${signAdminPayload(payload)}`;
-}
-
-function verifyPersistentAdminToken(token) {
-  const match = /^permanent\.([a-f0-9]{64})$/.exec(token);
-  if (!match) return false;
-  const expected = Buffer.from(signAdminPayload("permanent"), "hex");
-  const supplied = Buffer.from(match[1], "hex");
-  return expected.length === supplied.length && timingSafeEqual(expected, supplied);
-}
-
-function signAdminPayload(payload) {
-  return createHmac("sha256", `resume-admin:${process.env.ADMIN_PASSWORD || ""}`).update(payload).digest("hex");
+  return false;
 }
 
 function readCookie(req, name) {
@@ -752,4 +737,8 @@ function getVisitorId(req) {
 function getOptionalVisitorId(req) {
   const visitorId = req.get("X-Visitor-Id");
   return typeof visitorId === "string" && /^[a-zA-Z0-9_-]{16,80}$/.test(visitorId) ? visitorId : "";
+}
+
+function getUsageVisitorId(req) {
+  return getOptionalVisitorId(req) || `device-${createHmac("sha256", `resume-usage:${process.env.ADMIN_PASSWORD || ""}`).update(`${req.ip}|${req.get("User-Agent") || ""}`).digest("hex").slice(0, 40)}`;
 }

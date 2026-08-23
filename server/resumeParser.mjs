@@ -241,11 +241,27 @@ function isLikelyRepeatedPageHeader(line) {
 }
 
 function extractCandidateName(text) {
-  return String(text || "")
+  const lines = String(text || "")
     .split(/\n+/)
-    .slice(0, 8)
-    .map((line) => line.trim().replace(/^姓\s*名\s*[:：]\s*/, "").replace(/\s+/g, ""))
-    .find((line) => /^[\u4e00-\u9fff·]{2,4}$/.test(line) && !resumeSectionHeading.test(line) && !/^(个人简历|求职简历|求职者)$/.test(line)) || "";
+    .slice(0, 12)
+    .map((line) => line.trim().replace(/\s+/g, ""))
+    .filter(Boolean);
+  const labelled = lines
+    .map((line) => line.match(/^姓名[:：]([\u4e00-\u9fff·]{2,6})$/))
+    .find(Boolean);
+  if (labelled) return labelled[1];
+
+  const joinedRolePattern = /^([\u4e00-\u9fff·]{2,4})(?:安卓|Android|iOS|Java|前端|后端|全栈|算法|测试|产品|运营|设计|销售|数据|财务|人力|行政|市场|内容|新媒体)(?:开发)?(?:工程师|经理|专员|实习生|设计师|运营|顾问|总监|主管|助理)?$/i;
+  for (const line of lines) {
+    const joinedRole = line.match(joinedRolePattern);
+    if (joinedRole) return joinedRole[1];
+  }
+
+  return lines.find((line) =>
+    /^[\u4e00-\u9fff·]{2,4}$/.test(line)
+    && !resumeSectionHeading.test(line)
+    && !/^(个人简历|求职简历|求职者|掘金|知乎|简书|微博|微信|公众号|博客|个人博客|领英|脉脉)$/.test(line)
+  ) || "";
 }
 
 function extractBasicInfo(text, candidateName) {
